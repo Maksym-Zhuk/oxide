@@ -2,11 +2,10 @@
 name = "oxide"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.75"
 authors = ["Maksym <maksymzhuk759@gmail.com>"]
 description = "⚡ Lightning-fast project scaffolding tool for modern JavaScript/TypeScript development"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/maksym/oxide"
+repository = "https://github.com/Maksym-Zhuk/oxide"
 documentation = "https://docs.rs/oxide"
 readme = "README.md"
 keywords = ["cli", "scaffold", "template", "javascript", "typescript"]
