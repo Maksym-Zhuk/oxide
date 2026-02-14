@@ -55,6 +55,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or_else(|| format!("Template not found: {}", path))?;
 
             extract_template(template, &project_name)?;
+
+            println!("✅ Project created successfully!");
+            println!("\nNext steps:");
+            println!("  cd {}", project_name);
+            println!("  npm install");
+            println!("  npm run dev");
         }
     };
 

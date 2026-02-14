@@ -1,7 +1,4 @@
-use crate::{
-    prompts::{BuildTool, Framework, Language, Platform},
-    utils::validate::validate_project_name,
-};
+use crate::prompts::{BuildTool, Framework, Language, Platform};
 use inquire::{Select, Text};
 
 pub fn ask_project_name() -> Result<String, Box<dyn std::error::Error>> {
