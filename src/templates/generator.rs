@@ -6,6 +6,7 @@ use tera::{Context, Tera};
 pub fn extract_template(
   template: &Dir,
   project_name: &str,
+  tauri_user_name: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
   let output_path = Path::new(project_name);
 
@@ -15,6 +16,8 @@ pub fn extract_template(
   context.insert("project_name", project_name);
   context.insert("project_name_kebab", &to_kebab_case(project_name));
   context.insert("project_name_snake", &to_snake_case(project_name));
+  let user_name = tauri_user_name.unwrap_or("tauri".to_string());
+  context.insert("tauri_user_name", &user_name);
 
   let mut tera = Tera::default();
 
