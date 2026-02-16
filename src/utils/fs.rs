@@ -9,21 +9,25 @@ pub fn generate_path(
   let mut path_parts = Vec::new();
 
   if let Some(lg) = language {
-    path_parts.push(lg.to_string());
+    if lg == &Language::JavaScript {
+      path_parts.push("js".to_string());
+    } else if lg == &Language::TypeScript {
+      path_parts.push("ts".to_string());
+    }
   };
 
   if let Some(bt) = build_tool {
-    path_parts.push(bt.to_string());
+    path_parts.push(bt.to_string().to_lowercase());
   };
 
   if framework == &Framework::Qwik {
-    path_parts.push(BuildTool::Vite.to_string());
+    path_parts.push(BuildTool::Vite.to_string().to_lowercase());
   }
 
-  path_parts.push(framework.to_string());
+  path_parts.push(framework.to_string().to_lowercase());
 
   if let Some(pl) = platform {
-    path_parts.push(pl.to_string());
+    path_parts.push(pl.to_string().to_lowercase());
   };
 
   path_parts.join("/")

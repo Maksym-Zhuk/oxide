@@ -128,19 +128,19 @@ impl Framework {
 impl fmt::Display for Framework {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      Framework::React => "react",
-      Framework::Preact => "preact",
-      Framework::Vue => "vue",
-      Framework::Svelte => "svelte",
-      Framework::Solid => "solid",
-      Framework::Lit => "lit",
-      Framework::Qwik => "qwik",
-      Framework::Angular => "angular",
-      Framework::Nest => "nest",
-      Framework::Next => "next",
-      Framework::Nuxt => "nuxt",
-      Framework::Electron => "electron",
-      Framework::Tauri => "tauri",
+      Framework::React => "React",
+      Framework::Preact => "Preact",
+      Framework::Vue => "Vue",
+      Framework::Svelte => "Svelte",
+      Framework::Solid => "Solid",
+      Framework::Lit => "Lit",
+      Framework::Qwik => "Qwik",
+      Framework::Angular => "Angular",
+      Framework::Nest => "Nest",
+      Framework::Next => "Next",
+      Framework::Nuxt => "Nuxt",
+      Framework::Electron => "Electron",
+      Framework::Tauri => "Tauri",
     };
 
     write!(f, "{value}")
@@ -180,9 +180,9 @@ pub enum ReactVariant {
 impl fmt::Display for ReactVariant {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      ReactVariant::Default => "default",
-      ReactVariant::Swc => "swc",
-      ReactVariant::Compiler => "conpilator",
+      ReactVariant::Default => "Default",
+      ReactVariant::Swc => "Swc",
+      ReactVariant::Compiler => "Compiler",
     };
     write!(f, "{value}")
   }
@@ -197,8 +197,8 @@ pub enum AngularVariant {
 impl fmt::Display for AngularVariant {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      AngularVariant::Angular => "angular",
-      AngularVariant::Analog => "analog",
+      AngularVariant::Angular => "Angular",
+      AngularVariant::Analog => "Analog",
     };
     write!(f, "{value}")
   }
@@ -213,8 +213,8 @@ pub enum ElectronRuntime {
 impl fmt::Display for ElectronRuntime {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      ElectronRuntime::Vite => "vite",
-      ElectronRuntime::Farm => "farm",
+      ElectronRuntime::Vite => "Vite",
+      ElectronRuntime::Farm => "Farm",
     };
     write!(f, "{value}")
   }
@@ -229,8 +229,8 @@ pub enum ElectronVitePlatform {
 impl fmt::Display for ElectronVitePlatform {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      ElectronVitePlatform::React => "react",
-      ElectronVitePlatform::Vue => "vue",
+      ElectronVitePlatform::React => "React",
+      ElectronVitePlatform::Vue => "Vue",
     };
     write!(f, "{value}")
   }
@@ -248,11 +248,11 @@ pub enum ElectronFarmPlatform {
 impl fmt::Display for ElectronFarmPlatform {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      ElectronFarmPlatform::React => "react",
-      ElectronFarmPlatform::Preact => "preact",
-      ElectronFarmPlatform::Vue => "vue",
-      ElectronFarmPlatform::Svelte => "svelte",
-      ElectronFarmPlatform::Solid => "solid",
+      ElectronFarmPlatform::React => "React",
+      ElectronFarmPlatform::Preact => "Preact",
+      ElectronFarmPlatform::Vue => "Vue",
+      ElectronFarmPlatform::Svelte => "Svelte",
+      ElectronFarmPlatform::Solid => "Solid",
     };
     write!(f, "{value}")
   }
@@ -270,11 +270,11 @@ pub enum TauriPlatform {
 impl fmt::Display for TauriPlatform {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      TauriPlatform::React => "react",
-      TauriPlatform::Preact => "preact",
-      TauriPlatform::Vue => "vue",
-      TauriPlatform::Svelte => "svelte",
-      TauriPlatform::Solid => "solid",
+      TauriPlatform::React => "React",
+      TauriPlatform::Preact => "Preact",
+      TauriPlatform::Vue => "Vue",
+      TauriPlatform::Svelte => "Svelte",
+      TauriPlatform::Solid => "Solid",
     };
     write!(f, "{value}")
   }
@@ -289,8 +289,8 @@ pub enum NestPlatform {
 impl fmt::Display for NestPlatform {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      NestPlatform::Express => "express",
-      NestPlatform::Fastify => "fastify",
+      NestPlatform::Express => "Express",
+      NestPlatform::Fastify => "Fastify",
     };
     write!(f, "{value}")
   }
@@ -305,8 +305,8 @@ pub enum Language {
 impl fmt::Display for Language {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      Language::JavaScript => "js",
-      Language::TypeScript => "ts",
+      Language::JavaScript => "JavaScript",
+      Language::TypeScript => "TypeScript",
     };
 
     write!(f, "{value}")
@@ -323,9 +323,9 @@ pub enum BuildTool {
 impl fmt::Display for BuildTool {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
-      BuildTool::Vite => "vite",
-      BuildTool::Farm => "farm",
-      BuildTool::Rsbuild => "rsbuild",
+      BuildTool::Vite => "Vite",
+      BuildTool::Farm => "Farm",
+      BuildTool::Rsbuild => "Rsbuild",
     };
 
     write!(f, "{value}")

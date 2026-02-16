@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       println!("✅ Project created successfully!");
       println!("\nNext steps:");
       println!("  cd {}", project_name);
-      println!("  npm run dev");
+      println!("  bun dev");
     }
   };
 
