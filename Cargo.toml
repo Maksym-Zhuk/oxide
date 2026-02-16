@@ -72,8 +72,8 @@ regex = "1.10"
 semver = "1.0"
 which = "8.0.0"
 
-
 include_dir = "0.7"
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 assert_cmd = "2.0"

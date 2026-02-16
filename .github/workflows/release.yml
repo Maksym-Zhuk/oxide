@@ -1,5 +1,4 @@
 name: Release
-
 on:
   push:
     tags:
@@ -13,14 +12,15 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             name: linux-x86_64
-          - os: macos-latest
+          - os: macos-13 # Intel runner
             target: x86_64-apple-darwin
             name: macos-x86_64
-          - os: macos-latest
+          - os: macos-latest # ARM runner
             target: aarch64-apple-darwin
             name: macos-aarch64
 
     runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v3
 
@@ -32,6 +32,14 @@ jobs:
       - name: Install dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install openssl@3
+          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=$(brew --prefix openssl@3)/lib" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl@3)/include" >> $GITHUB_ENV
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
