@@ -35,7 +35,12 @@ where
     None
   };
 
-  let path = generate_path(&language, &build_tool, &framework.to_string(), &platform);
+  let path = generate_path(
+    &language,
+    &build_tool,
+    &framework.to_string().replace(" ", ""),
+    &platform,
+  );
 
   let template = TEMPLATES
     .get_dir(&path)

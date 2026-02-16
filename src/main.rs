@@ -4,7 +4,7 @@ use crate::{
     ProjectLayer,
     variables::{
       ask_backend_framework, ask_desctop_framework, ask_frontend_framework, ask_meta_framework,
-      ask_project_layer, ask_project_name,
+      ask_mobile_framework, ask_project_layer, ask_project_name,
     },
   },
   utils::{setup::setup_project, validate::validate_project_name},
@@ -50,6 +50,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         ProjectLayer::Desktop => {
           let framework = ask_desctop_framework()?;
+          setup_project(framework, &project_name).await?;
+        }
+        ProjectLayer::Mobile => {
+          let framework = ask_mobile_framework()?;
           setup_project(framework, &project_name).await?;
         }
       };

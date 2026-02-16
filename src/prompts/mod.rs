@@ -25,6 +25,7 @@ pub enum ProjectLayer {
   Meta,
   Backend,
   Desktop,
+  Mobile,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
@@ -54,6 +55,11 @@ pub enum MetaFramework {
 pub enum DesktopRuntime {
   Tauri,
   Electron,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MobileTool {
+  ReactNative,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -311,6 +317,19 @@ impl FrameworkConfig for DesktopRuntime {
   }
 }
 
+impl FrameworkConfig for MobileTool {
+  fn needs_build_tool(&self) -> bool {
+    false
+  }
+  fn needs_choose_language(&self) -> bool {
+    false
+  }
+
+  fn needs_choose_paltform(&self, _build_tool: &Option<BuildTool>) -> bool {
+    false
+  }
+}
+
 impl fmt::Display for ProjectLayer {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let value = match self {
@@ -318,6 +337,7 @@ impl fmt::Display for ProjectLayer {
       ProjectLayer::Meta => "Meta",
       ProjectLayer::Desktop => "Desktop",
       ProjectLayer::Backend => "Backend",
+      ProjectLayer::Mobile => "Mobile",
     };
     write!(f, "{value}")
   }
@@ -363,6 +383,15 @@ impl fmt::Display for DesktopRuntime {
     let value = match self {
       DesktopRuntime::Tauri => "Tauri",
       DesktopRuntime::Electron => "Electron",
+    };
+    write!(f, "{value}")
+  }
+}
+
+impl fmt::Display for MobileTool {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let value = match self {
+      MobileTool::ReactNative => "React Native",
     };
     write!(f, "{value}")
   }

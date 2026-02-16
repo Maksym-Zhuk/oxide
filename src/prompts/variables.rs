@@ -1,6 +1,6 @@
 use crate::prompts::{
   BackendTool, BuildTool, DesktopRuntime, FrameworkConfig, FrontendTool, Language, MetaFramework,
-  PackageManager, Platform, ProjectLayer,
+  MobileTool, PackageManager, Platform, ProjectLayer,
 };
 use inquire::{Select, Text};
 use regex::Regex;
@@ -20,6 +20,7 @@ pub fn ask_project_layer() -> Result<ProjectLayer, Box<dyn std::error::Error>> {
     ProjectLayer::Backend,
     ProjectLayer::Meta,
     ProjectLayer::Desktop,
+    ProjectLayer::Mobile,
   ];
 
   let project_layer = Select::new("Select a framework:", project_layers).prompt()?;
@@ -61,6 +62,14 @@ pub fn ask_desctop_framework() -> Result<DesktopRuntime, Box<dyn std::error::Err
 
   let framework = Select::new("Select a framework:", frameworks).prompt()?;
   Ok(framework)
+}
+
+pub fn ask_mobile_framework() -> Result<MobileTool, Box<dyn std::error::Error>> {
+  let tools = vec![MobileTool::ReactNative];
+
+  let tool = Select::new("Select a tool:", tools).prompt()?;
+  println!("{}", tool);
+  Ok(tool)
 }
 
 pub fn ask_build_tool<F>(framework: &F) -> Result<BuildTool, Box<dyn std::error::Error>>
