@@ -1,15 +1,13 @@
-use std::process::Command;
-
 use crate::{
   cli::{Cli, commands::Commands},
   prompts::{
-    Framework,
+    ProjectLayer,
     variables::{
-      ask_build_tool, ask_framework, ask_language, ask_platform, ask_project_name, ask_user_name,
+      ask_backend_framework, ask_desctop_framework, ask_frontend_framework, ask_meta_framework,
+      ask_project_layer, ask_project_name,
     },
   },
-  templates::generator::extract_template,
-  utils::{fs::generate_path, validate::validate_project_name},
+  utils::{setup::setup_project, validate::validate_project_name},
 };
 use clap::Parser;
 use include_dir::{Dir, include_dir};
@@ -35,58 +33,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
       validate_project_name(&project_name)?;
 
-      let framework = ask_framework()?;
+      let project_layer = ask_project_layer()?;
 
-      let build_tool = if framework.needs_build_tool() {
-        Some(ask_build_tool(framework)?)
-      } else {
-        None
+      match project_layer {
+        ProjectLayer::Frontend => {
+          let framework = ask_frontend_framework()?;
+          setup_project(framework, &project_name).await?;
+        }
+        ProjectLayer::Meta => {
+          let framework = ask_meta_framework()?;
+          setup_project(framework, &project_name).await?;
+        }
+        ProjectLayer::Backend => {
+          let framework = ask_backend_framework()?;
+          setup_project(framework, &project_name).await?;
+        }
+        ProjectLayer::Desktop => {
+          let framework = ask_desctop_framework()?;
+          setup_project(framework, &project_name).await?;
+        }
       };
-
-      println!("build_tool = {:?}", build_tool);
-
-      let language = if framework.needs_choose_language() {
-        Some(ask_language()?)
-      } else {
-        Some(prompts::Language::TypeScript)
-      };
-
-      let platform = if framework.needs_choose_paltform(&build_tool) {
-        Some(ask_platform(framework, &build_tool)?)
-      } else {
-        None
-      };
-
-      let path = generate_path(&language, &build_tool, &framework, &platform);
-
-      let template = TEMPLATES
-        .get_dir(&path)
-        .ok_or_else(|| format!("Template not found: {}", path))?;
-
-      let tauri_user_name = if framework == Framework::Tauri {
-        Some(ask_user_name()?)
-      } else {
-        None
-      };
-
-      extract_template(template, &project_name, tauri_user_name)?;
-
-      let status: std::process::ExitStatus = Command::new("bun")
-        .arg("install")
-        .current_dir(&project_name)
-        .status()
-        .map_err(|e: std::io::Error| -> Box<dyn std::error::Error> { e.into() })?;
-
-      if !status.success() {
-        return Err(format!("bun install failed with code {:?}", status.code()).into());
-      }
-
-      println!("✅ Project created successfully!");
-      println!("\nNext steps:");
-      println!("  cd {}", project_name);
-      println!("  bun dev");
     }
-  };
+  }
 
   Ok(())
 }

@@ -1,4 +1,7 @@
-use crate::prompts::{BuildTool, Framework, Language, Platform};
+use crate::prompts::{
+  BackendTool, BuildTool, DesktopRuntime, FrameworkConfig, FrontendTool, Language, MetaFramework,
+  PackageManager, Platform, ProjectLayer,
+};
 use inquire::{Select, Text};
 use regex::Regex;
 
@@ -11,28 +14,59 @@ pub fn ask_project_name() -> Result<String, Box<dyn std::error::Error>> {
   )
 }
 
-pub fn ask_framework() -> Result<Framework, Box<dyn std::error::Error>> {
-  let frameworks = vec![
-    Framework::React,
-    Framework::Preact,
-    Framework::Vue,
-    Framework::Svelte,
-    Framework::Solid,
-    Framework::Lit,
-    Framework::Qwik,
-    Framework::Angular,
-    Framework::Nest,
-    Framework::Next,
-    Framework::Nuxt,
-    Framework::Electron,
-    Framework::Tauri,
+pub fn ask_project_layer() -> Result<ProjectLayer, Box<dyn std::error::Error>> {
+  let project_layers = vec![
+    ProjectLayer::Frontend,
+    ProjectLayer::Backend,
+    ProjectLayer::Meta,
+    ProjectLayer::Desktop,
   ];
+
+  let project_layer = Select::new("Select a framework:", project_layers).prompt()?;
+  Ok(project_layer)
+}
+
+pub fn ask_frontend_framework() -> Result<FrontendTool, Box<dyn std::error::Error>> {
+  let tools = vec![
+    FrontendTool::React,
+    FrontendTool::Preact,
+    FrontendTool::Vue,
+    FrontendTool::Svelte,
+    FrontendTool::Solid,
+    FrontendTool::Lit,
+    FrontendTool::Qwik,
+    FrontendTool::Angular,
+  ];
+
+  let tool = Select::new("Select a tool:", tools).prompt()?;
+  Ok(tool)
+}
+
+pub fn ask_meta_framework() -> Result<MetaFramework, Box<dyn std::error::Error>> {
+  let frameworks = vec![MetaFramework::Next, MetaFramework::Nuxt];
 
   let framework = Select::new("Select a framework:", frameworks).prompt()?;
   Ok(framework)
 }
 
-pub fn ask_build_tool(framework: Framework) -> Result<BuildTool, Box<dyn std::error::Error>> {
+pub fn ask_backend_framework() -> Result<BackendTool, Box<dyn std::error::Error>> {
+  let tools = vec![BackendTool::Nest];
+
+  let tool = Select::new("Select a tool:", tools).prompt()?;
+  Ok(tool)
+}
+
+pub fn ask_desctop_framework() -> Result<DesktopRuntime, Box<dyn std::error::Error>> {
+  let frameworks = vec![DesktopRuntime::Tauri, DesktopRuntime::Electron];
+
+  let framework = Select::new("Select a framework:", frameworks).prompt()?;
+  Ok(framework)
+}
+
+pub fn ask_build_tool<F>(framework: &F) -> Result<BuildTool, Box<dyn std::error::Error>>
+where
+  F: FrameworkConfig,
+{
   let build_tool = framework.compatible_build_tools();
 
   let build_tool = Select::new("Select a build tool:", build_tool).prompt()?;
@@ -46,11 +80,14 @@ pub fn ask_language() -> Result<Language, Box<dyn std::error::Error>> {
   Ok(language)
 }
 
-pub fn ask_platform(
-  framework: Framework,
+pub fn ask_platform<F>(
+  framework: &F,
   build_tool: &Option<BuildTool>,
-) -> Result<Platform, Box<dyn std::error::Error>> {
-  let platforms = framework.compatible_platform(build_tool);
+) -> Result<Platform, Box<dyn std::error::Error>>
+where
+  F: FrameworkConfig,
+{
+  let platforms = framework.compatible_platforms(build_tool);
 
   if platforms.is_empty() {
     return Err("No available platforms for the selected framework/build tool".into());
@@ -78,4 +115,16 @@ pub fn ask_user_name() -> Result<String, Box<dyn std::error::Error>> {
   }
 
   Ok(user_name)
+}
+
+pub fn ask_package_manager() -> Result<PackageManager, Box<dyn std::error::Error>> {
+  let package_managers = vec![
+    PackageManager::NPM,
+    PackageManager::Yarn,
+    PackageManager::PNPM,
+    PackageManager::Bun,
+  ];
+
+  let package_manager = Select::new("Select a framework:", package_managers).prompt()?;
+  Ok(package_manager)
 }

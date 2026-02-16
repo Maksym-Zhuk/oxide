@@ -1,9 +1,9 @@
-use crate::prompts::{BuildTool, Framework, Language, Platform};
+use crate::prompts::{BuildTool, Language, Platform};
 
 pub fn generate_path(
   language: &Option<Language>,
   build_tool: &Option<BuildTool>,
-  framework: &Framework,
+  framework_name: &str,
   platform: &Option<Platform>,
 ) -> String {
   let mut path_parts = Vec::new();
@@ -20,11 +20,11 @@ pub fn generate_path(
     path_parts.push(bt.to_string().to_lowercase());
   };
 
-  if framework == &Framework::Qwik {
-    path_parts.push(BuildTool::Vite.to_string().to_lowercase());
+  if framework_name == "Qwik" {
+    path_parts.push("vite".to_string());
   }
 
-  path_parts.push(framework.to_string().to_lowercase());
+  path_parts.push(framework_name.to_string().to_lowercase());
 
   if let Some(pl) = platform {
     path_parts.push(pl.to_string().to_lowercase());
