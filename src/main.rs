@@ -1,7 +1,7 @@
 use crate::{
   cli::{Cli, commands::Commands},
   prompts::{
-    ProjectLayer,
+    BackendTool, DesktopRuntime, FrontendTool, MetaFramework, MobileTool, ProjectLayer,
     variables::{
       ask_backend_framework, ask_desctop_framework, ask_frontend_framework, ask_meta_framework,
       ask_mobile_framework, ask_project_layer, ask_project_name,
@@ -25,7 +25,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let cli = Cli::parse();
 
   match cli.command {
-    Commands::Create { name } => {
+    Commands::Create {
+      name,
+      layer,
+      framework,
+      build_tool,
+      language,
+      platform,
+      package_manager,
+    } => {
       let project_name = match name {
         Some(n) => n,
         None => ask_project_name()?,
@@ -33,28 +41,86 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
       validate_project_name(&project_name)?;
 
-      let project_layer = ask_project_layer()?;
+      let project_layer = match layer {
+        Some(l) => l,
+        None => ask_project_layer()?,
+      };
 
       match project_layer {
         ProjectLayer::Frontend => {
-          let framework = ask_frontend_framework()?;
-          setup_project(framework, &project_name).await?;
+          let framework = match framework {
+            Some(f) => f.parse::<FrontendTool>()?,
+            None => ask_frontend_framework()?,
+          };
+          setup_project(
+            &project_name,
+            framework,
+            build_tool,
+            language,
+            platform,
+            package_manager,
+          )
+          .await?;
         }
         ProjectLayer::Meta => {
-          let framework = ask_meta_framework()?;
-          setup_project(framework, &project_name).await?;
+          let framework = match framework {
+            Some(f) => f.parse::<MetaFramework>()?,
+            None => ask_meta_framework()?,
+          };
+          setup_project(
+            &project_name,
+            framework,
+            build_tool,
+            language,
+            platform,
+            package_manager,
+          )
+          .await?;
         }
         ProjectLayer::Backend => {
-          let framework = ask_backend_framework()?;
-          setup_project(framework, &project_name).await?;
+          let framework = match framework {
+            Some(f) => f.parse::<BackendTool>()?,
+            None => ask_backend_framework()?,
+          };
+          setup_project(
+            &project_name,
+            framework,
+            build_tool,
+            language,
+            platform,
+            package_manager,
+          )
+          .await?;
         }
         ProjectLayer::Desktop => {
-          let framework = ask_desctop_framework()?;
-          setup_project(framework, &project_name).await?;
+          let framework = match framework {
+            Some(f) => f.parse::<DesktopRuntime>()?,
+            None => ask_desctop_framework()?,
+          };
+          setup_project(
+            &project_name,
+            framework,
+            build_tool,
+            language,
+            platform,
+            package_manager,
+          )
+          .await?;
         }
         ProjectLayer::Mobile => {
-          let framework = ask_mobile_framework()?;
-          setup_project(framework, &project_name).await?;
+          let framework = match framework {
+            Some(f) => f.parse::<MobileTool>()?,
+            None => ask_mobile_framework()?,
+          };
+          setup_project(
+            &project_name,
+            framework,
+            build_tool,
+            language,
+            platform,
+            package_manager,
+          )
+          .await?;
         }
       };
     }

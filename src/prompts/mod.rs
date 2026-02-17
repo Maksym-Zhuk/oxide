@@ -4,6 +4,8 @@ use std::fmt;
 
 use clap::ValueEnum;
 
+use std::str::FromStr;
+
 pub trait FrameworkConfig {
   fn needs_build_tool(&self) -> bool;
   fn needs_choose_language(&self) -> bool;
@@ -121,20 +123,23 @@ pub enum NestPlatform {
   Fastify,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum Language {
+  #[value(name = "typescript", alias = "ts")]
   TypeScript,
+
+  #[value(name = "javascript", alias = "js")]
   JavaScript,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum BuildTool {
   Vite,
   Farm,
   Rsbuild,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum PackageManager {
   NPM,
   Yarn,
@@ -519,5 +524,131 @@ impl fmt::Display for PackageManager {
       PackageManager::Bun => "bun",
     };
     write!(f, "{value}")
+  }
+}
+
+impl FromStr for FrontendTool {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s.to_lowercase().as_str() {
+      "react" => Ok(FrontendTool::React),
+      "preact" => Ok(FrontendTool::Preact),
+      "vue" => Ok(FrontendTool::Vue),
+      "svelte" => Ok(FrontendTool::Svelte),
+      "solid" => Ok(FrontendTool::Solid),
+      "lit" => Ok(FrontendTool::Lit),
+      "qwik" => Ok(FrontendTool::Qwik),
+      "angular" => Ok(FrontendTool::Angular),
+      _ => Err(format!("Unknown frontend framework: {}", s)),
+    }
+  }
+}
+
+impl FromStr for BackendTool {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s.to_lowercase().as_str() {
+      "nest" => Ok(BackendTool::Nest),
+      _ => Err(format!("Unknown backend framework: {}", s)),
+    }
+  }
+}
+
+impl FromStr for MetaFramework {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s.to_lowercase().as_str() {
+      "next" => Ok(MetaFramework::Next),
+      "nuxt" => Ok(MetaFramework::Nuxt),
+      _ => Err(format!("Unknown meta framework: {}", s)),
+    }
+  }
+}
+
+impl FromStr for DesktopRuntime {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s.to_lowercase().as_str() {
+      "tauri" => Ok(DesktopRuntime::Tauri),
+      "electron" => Ok(DesktopRuntime::Electron),
+      _ => Err(format!("Unknown desktop runtime: {}", s)),
+    }
+  }
+}
+
+impl FromStr for MobileTool {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s.to_lowercase().as_str() {
+      "react-native" | "reactnative" => Ok(MobileTool::ReactNative),
+      _ => Err(format!("Unknown mobile framework: {}", s)),
+    }
+  }
+}
+
+pub fn parse_platform(
+  s: &str,
+  framework: &str,
+  build_tool: &Option<BuildTool>,
+) -> Result<Platform, String> {
+  match (
+    framework.to_lowercase().as_str(),
+    build_tool,
+    s.to_lowercase().as_str(),
+  ) {
+    // React
+    ("react", Some(BuildTool::Vite), "default") => Ok(Platform::React(ReactVariant::Default)),
+    ("react", Some(BuildTool::Vite), "swc") => Ok(Platform::React(ReactVariant::Swc)),
+    ("react", Some(BuildTool::Vite), "compiler") => Ok(Platform::React(ReactVariant::Compiler)),
+
+    // Angular
+    ("angular", _, "angular") => Ok(Platform::Angular(AngularVariant::Angular)),
+    ("angular", _, "analog") => Ok(Platform::Angular(AngularVariant::Analog)),
+
+    // Electron Vite
+    ("electron", Some(BuildTool::Vite), "react") => {
+      Ok(Platform::ElectronVite(ElectronVitePlatform::React))
+    }
+    ("electron", Some(BuildTool::Vite), "vue") => {
+      Ok(Platform::ElectronVite(ElectronVitePlatform::Vue))
+    }
+
+    // Electron Farm
+    ("electron", Some(BuildTool::Farm), "react") => {
+      Ok(Platform::ElectronFarm(ElectronFarmPlatform::React))
+    }
+    ("electron", Some(BuildTool::Farm), "preact") => {
+      Ok(Platform::ElectronFarm(ElectronFarmPlatform::Preact))
+    }
+    ("electron", Some(BuildTool::Farm), "vue") => {
+      Ok(Platform::ElectronFarm(ElectronFarmPlatform::Vue))
+    }
+    ("electron", Some(BuildTool::Farm), "svelte") => {
+      Ok(Platform::ElectronFarm(ElectronFarmPlatform::Svelte))
+    }
+    ("electron", Some(BuildTool::Farm), "solid") => {
+      Ok(Platform::ElectronFarm(ElectronFarmPlatform::Solid))
+    }
+
+    // Tauri
+    ("tauri", _, "react") => Ok(Platform::Tauri(TauriPlatform::React)),
+    ("tauri", _, "preact") => Ok(Platform::Tauri(TauriPlatform::Preact)),
+    ("tauri", _, "vue") => Ok(Platform::Tauri(TauriPlatform::Vue)),
+    ("tauri", _, "svelte") => Ok(Platform::Tauri(TauriPlatform::Svelte)),
+    ("tauri", _, "solid") => Ok(Platform::Tauri(TauriPlatform::Solid)),
+
+    // Nest
+    ("nest", _, "express") => Ok(Platform::Nest(NestPlatform::Express)),
+    ("nest", _, "fastify") => Ok(Platform::Nest(NestPlatform::Fastify)),
+
+    _ => Err(format!(
+      "Unknown platform '{}' for framework '{}'",
+      s, framework
+    )),
   }
 }

@@ -3,7 +3,7 @@ use std::process::Command;
 use crate::{
   TEMPLATES,
   prompts::{
-    self, FrameworkConfig,
+    self, BuildTool, FrameworkConfig, Language, PackageManager, parse_platform,
     variables::{ask_build_tool, ask_language, ask_package_manager, ask_platform, ask_user_name},
   },
   templates::generator::extract_template,
@@ -11,28 +11,34 @@ use crate::{
 };
 
 pub async fn setup_project<F>(
-  framework: F,
   project_name: &str,
+  framework: F,
+  build_tool: Option<BuildTool>,
+  language: Option<Language>,
+  platform: Option<String>,
+  package_manager: Option<PackageManager>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
   F: FrameworkConfig + std::fmt::Display + std::fmt::Debug,
 {
-  let build_tool = if framework.needs_build_tool() {
-    Some(ask_build_tool(&framework)?)
-  } else {
-    None
+  let build_tool = match build_tool {
+    Some(b) => Some(b),
+    None if framework.needs_build_tool() => Some(ask_build_tool(&framework)?),
+    None => None,
   };
 
-  let language = if framework.needs_choose_language() {
-    Some(ask_language()?)
-  } else {
-    Some(prompts::Language::TypeScript)
+  let language = match language {
+    Some(l) => Some(l),
+    None if framework.needs_choose_language() => Some(ask_language()?),
+    None => Some(prompts::Language::TypeScript),
   };
 
-  let platform = if framework.needs_choose_paltform(&build_tool) {
-    Some(ask_platform(&framework, &build_tool)?)
-  } else {
-    None
+  let platform = match platform {
+    Some(p) => Some(parse_platform(&p, &framework.to_string(), &build_tool)?),
+    None if framework.needs_choose_paltform(&build_tool) => {
+      Some(ask_platform(&framework, &build_tool)?)
+    }
+    None => None,
   };
 
   let path = generate_path(
@@ -52,7 +58,10 @@ where
     None
   };
 
-  let package_manager = ask_package_manager()?;
+  let package_manager = match package_manager {
+    Some(pm) => pm,
+    None => ask_package_manager()?,
+  };
 
   extract_template(template, project_name, tauri_user_name)?;
 
