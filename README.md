@@ -33,7 +33,6 @@ source ~/.zshrc
 
 Download the latest release for your platform:
 - [Linux x86_64](https://github.com/Maksym-Zhuk/oxide/releases/latest/download/oxide-linux-x86_64.tar.gz)
-- [macOS Intel](https://github.com/Maksym-Zhuk/oxide/releases/latest/download/oxide-macos-x86_64.tar.gz)
 - [macOS Apple Silicon](https://github.com/Maksym-Zhuk/oxide/releases/latest/download/oxide-macos-aarch64.tar.gz)
 - [Windows](https://github.com/Maksym-Zhuk/oxide/releases/latest/download/oxide-windows-x86_64.zip)
 
