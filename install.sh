@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="oxide"
-REPO="Maksym-Zhuk/oxide"
+REPO="oxide-cli/oxide"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 

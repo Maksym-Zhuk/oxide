@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $APP_NAME = "oxide"
-$REPO = "Maksym-Zhuk/oxide"
+$REPO = "oxide-cli/oxide"
 $ARCH = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "i686" }
 
 Write-Host "Fetching latest version..." -ForegroundColor Cyan
