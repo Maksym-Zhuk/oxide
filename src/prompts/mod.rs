@@ -2,6 +2,7 @@ pub mod variables;
 
 use std::fmt;
 
+use anyhow::{Result, anyhow};
 use clap::ValueEnum;
 
 use std::str::FromStr;
@@ -528,7 +529,7 @@ impl fmt::Display for PackageManager {
 }
 
 impl FromStr for FrontendTool {
-  type Err = String;
+  type Err = anyhow::Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s.to_lowercase().as_str() {
@@ -540,53 +541,53 @@ impl FromStr for FrontendTool {
       "lit" => Ok(FrontendTool::Lit),
       "qwik" => Ok(FrontendTool::Qwik),
       "angular" => Ok(FrontendTool::Angular),
-      _ => Err(format!("Unknown frontend framework: {}", s)),
+      _ => Err(anyhow!("Unknown frontend framework: {}", s)),
     }
   }
 }
 
 impl FromStr for BackendTool {
-  type Err = String;
+  type Err = anyhow::Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s.to_lowercase().as_str() {
       "nest" => Ok(BackendTool::Nest),
-      _ => Err(format!("Unknown backend framework: {}", s)),
+      _ => Err(anyhow!("Unknown backend framework: {}", s)),
     }
   }
 }
 
 impl FromStr for MetaFramework {
-  type Err = String;
+  type Err = anyhow::Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s.to_lowercase().as_str() {
       "next" => Ok(MetaFramework::Next),
       "nuxt" => Ok(MetaFramework::Nuxt),
-      _ => Err(format!("Unknown meta framework: {}", s)),
+      _ => Err(anyhow!("Unknown meta framework: {}", s)),
     }
   }
 }
 
 impl FromStr for DesktopRuntime {
-  type Err = String;
+  type Err = anyhow::Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s.to_lowercase().as_str() {
       "tauri" => Ok(DesktopRuntime::Tauri),
       "electron" => Ok(DesktopRuntime::Electron),
-      _ => Err(format!("Unknown desktop runtime: {}", s)),
+      _ => Err(anyhow!("Unknown desktop runtime: {}", s)),
     }
   }
 }
 
 impl FromStr for MobileTool {
-  type Err = String;
+  type Err = anyhow::Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s.to_lowercase().as_str() {
       "react-native" | "reactnative" => Ok(MobileTool::ReactNative),
-      _ => Err(format!("Unknown mobile framework: {}", s)),
+      _ => Err(anyhow!("Unknown mobile framework: {}", s)),
     }
   }
 }
@@ -595,7 +596,7 @@ pub fn parse_platform(
   s: &str,
   framework: &str,
   build_tool: &Option<BuildTool>,
-) -> Result<Platform, String> {
+) -> Result<Platform> {
   match (
     framework.to_lowercase().as_str(),
     build_tool,
@@ -646,9 +647,10 @@ pub fn parse_platform(
     ("nest", _, "express") => Ok(Platform::Nest(NestPlatform::Express)),
     ("nest", _, "fastify") => Ok(Platform::Nest(NestPlatform::Fastify)),
 
-    _ => Err(format!(
+    _ => Err(anyhow!(
       "Unknown platform '{}' for framework '{}'",
-      s, framework
+      s,
+      framework
     )),
   }
 }

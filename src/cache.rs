@@ -1,0 +1,155 @@
+use std::{fs, path::Path};
+
+use anyhow::Result;
+use chrono::Utc;
+use comfy_table::{Attribute, Cell, Color, Table};
+use serde::{Deserialize, Serialize};
+
+use crate::templates::OxideTemplate;
+
+#[derive(Serialize, Deserialize)]
+pub struct TemplatesCache {
+  #[serde(rename = "lastUpdated")]
+  pub last_updated: String,
+  pub templates: Vec<CachedTemplate>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CachedTemplate {
+  pub name: String,
+  pub version: String,
+  pub source: String,
+  pub path: String,
+  pub official: bool,
+}
+
+pub fn update_templates_cache(template_path: &Path, path: &Path) -> Result<()> {
+  let oxide_json = template_path.join(path).join("oxide.template.json");
+  let content = fs::read_to_string(&oxide_json)?;
+  let template_info: OxideTemplate = serde_json::from_str(&content)?;
+
+  let templates_json = template_path.join("oxide-templates.json");
+  let mut templates_info: TemplatesCache = if templates_json.exists() {
+    let content = fs::read_to_string(&templates_json)?;
+    serde_json::from_str(&content)?
+  } else {
+    TemplatesCache {
+      last_updated: Utc::now().to_rfc3339(),
+      templates: Vec::new(),
+    }
+  };
+
+  templates_info.last_updated = Utc::now().to_rfc3339();
+
+  templates_info.templates.push(CachedTemplate {
+    name: template_info.name,
+    version: template_info.version,
+    source: template_info.repository.url,
+    path: path.to_string_lossy().to_string(),
+    official: template_info.official,
+  });
+
+  fs::write(
+    &templates_json,
+    serde_json::to_string_pretty(&templates_info)?,
+  )?;
+
+  Ok(())
+}
+
+pub fn remove_template_from_cache(template_path: &Path, template_name: &str) -> Result<()> {
+  let templates_json = template_path.join("oxide-templates.json");
+
+  if !templates_json.exists() {
+    return Ok(());
+  }
+
+  let content = fs::read_to_string(&templates_json)?;
+  let mut templates_info: TemplatesCache = serde_json::from_str(&content)?;
+
+  templates_info.last_updated = Utc::now().to_rfc3339();
+
+  if let Some(t) = templates_info
+    .templates
+    .iter()
+    .find(|t| t.name == template_name)
+  {
+    let cleanup_path = template_path.join(&t.path);
+
+    if cleanup_path.exists() {
+      if let Err(e) = fs::remove_dir_all(&cleanup_path) {
+        println!("Failed to remove: {}", e);
+      }
+
+      let mut current = cleanup_path.parent();
+      while let Some(parent) = current {
+        if parent == template_path {
+          break;
+        }
+        if fs::remove_dir(parent).is_err() {
+          break;
+        }
+        current = parent.parent();
+      }
+    }
+  }
+
+  templates_info
+    .templates
+    .retain(|template| template.name != template_name);
+
+  fs::write(
+    &templates_json,
+    serde_json::to_string_pretty(&templates_info)?,
+  )?;
+
+  println!("✓ Removed template");
+  Ok(())
+}
+
+pub fn get_installed_templates(template_path: &Path) -> Result<()> {
+  let templates_json = template_path.join("oxide-templates.json");
+
+  let templates_info: TemplatesCache = if templates_json.exists() {
+    let content = fs::read_to_string(&templates_json)?;
+    serde_json::from_str(&content)?
+  } else {
+    TemplatesCache {
+      last_updated: Utc::now().to_rfc3339(),
+      templates: Vec::new(),
+    }
+  };
+
+  if templates_info.templates.is_empty() {
+    println!("No templates installed yet.");
+    return Ok(());
+  }
+
+  let mut table = Table::new();
+
+  table.set_header(vec![
+    Cell::new("Name").add_attribute(Attribute::Bold),
+    Cell::new("Version").add_attribute(Attribute::Bold),
+    Cell::new("Official").add_attribute(Attribute::Bold),
+  ]);
+
+  for template in templates_info.templates {
+    table.add_row(vec![
+      Cell::new(&template.name),
+      Cell::new(&template.version),
+      Cell::new(if template.official { "✓" } else { "✗" }).fg(if template.official {
+        Color::Green
+      } else {
+        Color::Red
+      }),
+    ]);
+  }
+
+  println!(
+    "\nInstalled templates (last updated: {}):",
+    templates_info.last_updated
+  );
+  println!("{table}");
+
+  Ok(())
+}

@@ -1,16 +1,20 @@
-use std::{fs, path::Path};
+use std::{
+  fs,
+  path::{Path, PathBuf},
+};
 
-use include_dir::Dir;
+use anyhow::Result;
 use tera::{Context, Tera};
 
+use crate::templates::TemplateFile;
+
 pub fn extract_template(
-  template: &Dir,
+  files: &[TemplateFile],
   project_name: &str,
   tauri_user_name: Option<String>,
-) -> Result<(), Box<dyn std::error::Error>> {
-  let output_path = Path::new(project_name);
-
-  fs::create_dir_all(output_path)?;
+) -> Result<()> {
+  let output_path = PathBuf::from(project_name);
+  fs::create_dir_all(&output_path)?;
 
   let mut context = Context::new();
   context.insert("project_name", project_name);
@@ -21,7 +25,7 @@ pub fn extract_template(
 
   let mut tera = Tera::default();
 
-  extract_dir_contents(template, output_path, &mut tera, &context)?;
+  extract_dir_contents(files, &output_path, &mut tera, &context)?;
 
   Ok(())
 }
@@ -47,37 +51,34 @@ fn to_snake_case(s: &str) -> String {
 }
 
 pub fn extract_dir_contents(
-  dir: &Dir,
+  files: &[TemplateFile],
   base_path: &Path,
   tera: &mut Tera,
   context: &Context,
-) -> Result<(), Box<dyn std::error::Error>> {
-  for file in dir.files() {
-    let file_name = file.path().file_name().unwrap();
+) -> Result<()> {
+  for file in files {
+    let file_name = file.path.file_name().unwrap();
     let file_name_str = file_name.to_string_lossy();
+
+    let output_path = base_path.join(&file.path);
+    if let Some(parent) = output_path.parent() {
+      fs::create_dir_all(parent)?;
+    }
 
     if file_name_str.ends_with(".tera") {
       let output_name = file_name_str.trim_end_matches(".tera");
-      let output_path = base_path.join(output_name);
-      let template_content = std::str::from_utf8(file.contents())?;
+      let output_path = output_path.with_file_name(output_name);
+
+      let template_content = std::str::from_utf8(&file.contents)?;
       tera.add_raw_template(&file_name_str, template_content)?;
       let rendered = tera.render(&file_name_str, context)?;
+
       fs::write(&output_path, rendered)?;
       println!("  ✓ {}", output_path.display());
     } else {
-      let output_path = base_path.join(file_name);
-      fs::write(&output_path, file.contents())?;
+      fs::write(&output_path, &file.contents)?;
       println!("  ✓ {}", output_path.display());
     }
   }
-
-  for subdir in dir.dirs() {
-    let subdir_name = subdir.path().file_name().unwrap();
-    let subdir_path = base_path.join(subdir_name);
-
-    fs::create_dir_all(&subdir_path)?;
-    extract_dir_contents(subdir, &subdir_path, tera, context)?;
-  }
-
   Ok(())
 }

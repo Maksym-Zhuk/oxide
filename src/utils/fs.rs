@@ -1,34 +1,74 @@
-use crate::prompts::{BuildTool, Language, Platform};
+use std::{
+  fs,
+  path::{Path, PathBuf},
+};
+
+use anyhow::Result;
+
+use crate::{
+  prompts::{BuildTool, Language, Platform},
+  templates::TemplateFile,
+};
 
 pub fn generate_path(
   language: &Option<Language>,
   build_tool: &Option<BuildTool>,
   framework_name: &str,
   platform: &Option<Platform>,
-) -> String {
-  let mut path_parts = Vec::new();
+) -> PathBuf {
+  let mut path = PathBuf::new();
 
   if let Some(lg) = language {
-    if lg == &Language::JavaScript {
-      path_parts.push("js".to_string());
-    } else if lg == &Language::TypeScript {
-      path_parts.push("ts".to_string());
+    match lg {
+      Language::JavaScript => path.push("js"),
+      Language::TypeScript => path.push("ts"),
     }
   };
 
   if let Some(bt) = build_tool {
-    path_parts.push(bt.to_string().to_lowercase());
+    path.push(bt.to_string().to_lowercase());
   };
 
   if framework_name == "Qwik" {
-    path_parts.push("vite".to_string());
+    path.push("vite");
   }
 
-  path_parts.push(framework_name.to_string().to_lowercase());
+  path.push(framework_name.to_string().to_lowercase());
 
   if let Some(pl) = platform {
-    path_parts.push(pl.to_string().to_lowercase());
+    path.push(pl.to_string().to_lowercase());
   };
 
-  path_parts.join("/")
+  path
+}
+
+pub fn read_dir_to_files(path: &Path) -> Result<Vec<TemplateFile>> {
+  let mut files = Vec::new();
+  read_dir_recursive(path, path, &mut files)?;
+  Ok(files)
+}
+
+pub fn read_dir_recursive(
+  base: &Path,
+  current: &Path,
+  files: &mut Vec<TemplateFile>,
+) -> Result<()> {
+  for entry in fs::read_dir(current)? {
+    let entry = entry?;
+    let path = entry.path();
+    let file_type = entry.file_type()?;
+
+    if file_type.is_file() {
+      let contents = fs::read(&path)?;
+      let relative_path = path.strip_prefix(base)?.to_path_buf();
+      files.push(TemplateFile {
+        path: relative_path,
+        contents,
+      });
+    } else if file_type.is_dir() {
+      read_dir_recursive(base, &path, files)?;
+    }
+  }
+
+  Ok(())
 }

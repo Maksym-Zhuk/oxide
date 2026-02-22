@@ -1,32 +1,37 @@
 use std::path::Path;
 
+use anyhow::{Result, anyhow};
 use regex::Regex;
 
-pub fn validate_project_name(name: &str) -> Result<(), String> {
+pub fn validate_project_name(name: &str) -> Result<()> {
+  if name == "." {
+    return Ok(());
+  }
+
   if Path::new(name).exists() {
-    return Err(format!("Directory '{}' already exists!", name));
+    return Err(anyhow!("Directory '{}' already exists!", name));
   }
   if name.is_empty() {
-    return Err("Project name cannot be empty".to_string());
+    return Err(anyhow!("Project name cannot be empty"));
   }
 
   if name.len() > 255 {
-    return Err("Project name is too long (max 255 characters)".to_string());
+    return Err(anyhow!("Project name is too long (max 255 characters)"));
   }
 
   let valid_chars = Regex::new(r"^[a-zA-Z0-9_\-\.]+$").unwrap();
   if !valid_chars.is_match(name) {
-    return Err(
-      "Project name can only contain letters, numbers, hyphens, underscores, and dots".to_string(),
-    );
+    return Err(anyhow!(
+      "Project name can only contain letters, numbers, hyphens, underscores, and dots"
+    ));
   }
 
   if name.starts_with('.') {
-    return Err("Project name cannot start with a dot".to_string());
+    return Err(anyhow!("Project name cannot start with a dot"));
   }
 
   if name.ends_with('.') || name.ends_with(' ') {
-    return Err("Project name cannot end with a dot or space".to_string());
+    return Err(anyhow!("Project name cannot end with a dot or space"));
   }
 
   let reserved_windows = [
@@ -36,7 +41,7 @@ pub fn validate_project_name(name: &str) -> Result<(), String> {
 
   let uppercase_name = name.to_uppercase();
   if reserved_windows.contains(&uppercase_name.as_str()) {
-    return Err(format!("'{}' is a reserved name in Windows", name));
+    return Err(anyhow!("'{}' is a reserved name in Windows", name));
   }
 
   Ok(())
