@@ -2,8 +2,11 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+pub mod catalog;
 pub mod generator;
+pub mod info;
 pub mod install;
+pub mod link;
 pub mod loader;
 pub mod publish;
 pub mod update;
@@ -21,6 +24,20 @@ pub struct AnesisTemplate {
   pub anesis_version: String,
   pub repository: AnesisTemplateRepository,
   pub metadata: AnesisTemplateMetadata,
+  // Prompted once when scaffolding; same schema as addon inputs. Values (and their
+  // derived case variants) are exposed to `.tera` files and to `exclude` conditions.
+  #[serde(default)]
+  pub inputs: Vec<crate::addons::manifest::InputDef>,
+  // Files to omit when a condition holds, e.g. `{ "when": "!use_docker", "paths":
+  // ["Dockerfile"] }`. `when` is `<input>` or `!<input>` against a boolean input.
+  #[serde(default)]
+  pub exclude: Vec<ExcludeBlock>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ExcludeBlock {
+  pub when: String,
+  pub paths: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]

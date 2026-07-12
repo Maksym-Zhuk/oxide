@@ -6,7 +6,7 @@ use anesis::addons::{
   steps::{
     Rollback, append::execute_append, copy::execute_copy, create::execute_create,
     delete::execute_delete, inject::execute_inject, move_step::execute_move,
-    rename::execute_rename, render_lines, render_string, replace::execute_replace,
+    rename::execute_rename, render_string, replace::execute_replace,
   },
 };
 use assert_fs::prelude::*;
@@ -33,7 +33,7 @@ fn create_new_file() {
   };
   let rollbacks = execute_create(&step, dir.path(), &ctx_with("name", "world")).unwrap();
   let content = std::fs::read_to_string(dir.path().join("hello.txt")).unwrap();
-  assert_eq!(content, "Hello, world!");
+  assert_eq!(content, "Hello, world!\n");
   assert!(matches!(rollbacks[0], Rollback::DeleteCreatedFile { .. }));
 }
 
@@ -48,7 +48,7 @@ fn create_overwrites_existing_file() {
   };
   let rollbacks = execute_create(&step, dir.path(), &empty_ctx()).unwrap();
   let content = std::fs::read_to_string(dir.path().join("hello.txt")).unwrap();
-  assert_eq!(content, "new content");
+  assert_eq!(content, "new content\n");
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
@@ -594,37 +594,17 @@ fn copy_creates_destination_subdirectory() {
   assert!(project_dir.path().join("subdir/dst.txt").exists());
 }
 
-// ── render_lines ──────────────────────────────────────────────────────────────
-
-#[test]
-fn render_lines_substitutes_variables() {
-  let mut ctx = tera::Context::new();
-  ctx.insert("name", "world");
-  let lines = vec![
-    "Hello, {{ name }}!".to_string(),
-    "Goodbye, {{ name }}.".to_string(),
-  ];
-  let rendered = render_lines(&lines, &ctx).unwrap();
-  assert_eq!(rendered[0], "Hello, world!");
-  assert_eq!(rendered[1], "Goodbye, world.");
-}
-
-#[test]
-fn render_lines_empty_input_returns_empty() {
-  let ctx = tera::Context::new();
-  let rendered = render_lines(&[], &ctx).unwrap();
-  assert!(rendered.is_empty());
-}
-
-#[test]
-fn render_lines_no_variables_unchanged() {
-  let ctx = tera::Context::new();
-  let lines = vec!["plain line".to_string()];
-  let rendered = render_lines(&lines, &ctx).unwrap();
-  assert_eq!(rendered[0], "plain line");
-}
-
 // ── render_string ─────────────────────────────────────────────────────────────
+
+#[test]
+fn render_string_renders_multiline_control_blocks() {
+  // The whole content is rendered in one pass, so a Tera block that opens on one
+  // line and closes on another works (line-by-line rendering broke this).
+  let mut ctx = tera::Context::new();
+  ctx.insert("enabled", &true);
+  let rendered = render_string("{% if enabled %}\nyes\n{% endif %}", &ctx).unwrap();
+  assert_eq!(rendered.trim(), "yes");
+}
 
 #[test]
 fn render_string_substitutes_variable() {
@@ -786,7 +766,7 @@ fn create_uses_template_var_in_path() {
   execute_create(&step, dir.path(), &ctx).unwrap();
 
   let content = std::fs::read_to_string(dir.path().join(".env.test")).unwrap();
-  assert_eq!(content, "ENV=test");
+  assert_eq!(content, "ENV=test\n");
 }
 
 // ── append: trailing newline handling ────────────────────────────────────────

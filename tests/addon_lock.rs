@@ -6,6 +6,8 @@ fn sample_entry(id: &str) -> LockEntry {
     version: "1.0.0".to_string(),
     variant: "universal".to_string(),
     commands_executed: vec![],
+    journal: vec![],
+    inputs: Default::default(),
   }
 }
 
@@ -69,6 +71,8 @@ fn upsert_entry_replaces_existing() {
     version: "2.0.0".to_string(),
     variant: "nestjs".to_string(),
     commands_executed: vec!["install".to_string()],
+    journal: vec![],
+    inputs: Default::default(),
   });
   assert_eq!(lock.addons.len(), 1);
   assert_eq!(lock.addons[0].version, "2.0.0");

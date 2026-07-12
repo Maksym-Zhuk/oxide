@@ -1,19 +1,15 @@
 mod common;
 
-use anesis::utils::errors::AnesisError;
-use anyhow::anyhow;
-use common::{rerun_prompt_message_for_tests, should_fallback_to_cached_manifest_for_tests};
+use common::{is_newer_for_tests, rerun_prompt_message_for_tests};
 
 #[test]
-fn fallback_to_cached_manifest_when_user_is_not_logged_in() {
-  let error = anyhow::Error::from(AnesisError::NotLoggedIn);
-  assert!(should_fallback_to_cached_manifest_for_tests(&error));
-}
-
-#[test]
-fn do_not_fallback_to_cached_manifest_for_unrelated_errors() {
-  let error = anyhow!("anesis.addon.json is malformed");
-  assert!(!should_fallback_to_cached_manifest_for_tests(&error));
+fn is_newer_compares_semver_not_strings() {
+  assert!(is_newer_for_tests("0.2.0", "0.1.0"));
+  assert!(is_newer_for_tests("0.10.0", "0.9.0")); // string-compare would say 0.10 < 0.9
+  assert!(!is_newer_for_tests("0.1.0", "0.1.0"));
+  assert!(!is_newer_for_tests("0.1.0", "0.2.0"));
+  // Unparseable versions fall back to inequality.
+  assert!(is_newer_for_tests("2024-05", "2024-04"));
 }
 
 #[test]
@@ -41,30 +37,4 @@ fn rerun_prompt_message_is_none_when_no_prior_version_recorded() {
     prompt.is_none(),
     "should not prompt to re-run on a fresh install"
   );
-}
-
-#[test]
-fn should_fallback_for_http_unauthorized() {
-  let error = anyhow::Error::from(AnesisError::HttpUnauthorized);
-  assert!(should_fallback_to_cached_manifest_for_tests(&error));
-}
-
-#[test]
-fn should_fallback_for_network_connect_anesis_error() {
-  // A connection failure is a transient/offline condition, so the runner falls
-  // back to the cached manifest rather than aborting the command.
-  let error = anyhow::Error::from(AnesisError::NetworkConnect);
-  assert!(should_fallback_to_cached_manifest_for_tests(&error));
-}
-
-#[test]
-fn should_fallback_for_network_timeout_anesis_error() {
-  let error = anyhow::Error::from(AnesisError::NetworkTimeout);
-  assert!(should_fallback_to_cached_manifest_for_tests(&error));
-}
-
-#[test]
-fn should_not_fallback_for_http_server_error() {
-  let error = anyhow::Error::from(AnesisError::HttpServerError("addon".to_string()));
-  assert!(!should_fallback_to_cached_manifest_for_tests(&error));
 }

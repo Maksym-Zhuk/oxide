@@ -5,6 +5,8 @@ use thiserror::Error;
 pub enum AnesisError {
   #[error("You are not logged in.")]
   NotLoggedIn,
+  #[error("Your session has expired.")]
+  SessionExpired,
   #[error("Authentication failed. Your session may have expired.")]
   HttpUnauthorized,
   #[error("{0} was not found.")]
@@ -78,6 +80,7 @@ pub fn print_error(err: &anyhow::Error) {
 fn hint_for_anesis_error(err: &AnesisError) -> Option<&'static str> {
   match err {
     AnesisError::NotLoggedIn => Some("Run `anesis login` to authenticate."),
+    AnesisError::SessionExpired => Some("Run `anesis login` to re-authenticate."),
     AnesisError::HttpUnauthorized => Some("Run `anesis login` to re-authenticate."),
     AnesisError::HttpNotFound(_) => Some("Check the name is correct and that you have access."),
     AnesisError::HttpServerError(_) => {

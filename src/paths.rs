@@ -4,13 +4,13 @@ use anyhow::Result;
 
 pub struct AnesisPaths {
   pub home: PathBuf,
-  pub config: PathBuf,
   pub version_check: PathBuf,
   pub cache: PathBuf,
   pub templates: PathBuf,
   pub auth: PathBuf,
   pub addons: PathBuf,
   pub addons_index: PathBuf,
+  pub stacks: PathBuf,
 }
 
 impl AnesisPaths {
@@ -22,7 +22,6 @@ impl AnesisPaths {
 
     Ok(Self {
       home: anesis_home.clone(),
-      config: anesis_home.join("config.json"),
       version_check: anesis_home.join("version_check.json"),
       cache: anesis_home.join("cache"),
       templates: anesis_home.join("cache").join("templates"),
@@ -32,6 +31,7 @@ impl AnesisPaths {
         .join("cache")
         .join("addons")
         .join("anesis-addons.json"),
+      stacks: anesis_home.join("cache").join("stacks"),
     })
   }
 
@@ -40,6 +40,7 @@ impl AnesisPaths {
     fs::create_dir_all(&self.cache)?;
     fs::create_dir_all(&self.templates)?;
     fs::create_dir_all(&self.addons)?;
+    fs::create_dir_all(&self.stacks)?;
     Ok(())
   }
 }

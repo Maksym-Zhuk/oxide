@@ -61,6 +61,7 @@ fn renders_tera_file_and_strips_extension() {
     &mut tera,
     &make_context("my-app"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   )
   .unwrap();
 
@@ -83,6 +84,7 @@ fn copies_non_tera_file_unchanged() {
     &mut tera,
     &make_context("my-app"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   )
   .unwrap();
 
@@ -105,6 +107,7 @@ fn template_vars_kebab_and_snake() {
     &mut tera,
     &make_context("My_Project"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   )
   .unwrap();
 
@@ -127,6 +130,7 @@ fn creates_nested_output_directories() {
     &mut tera,
     &make_context("app"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   )
   .unwrap();
 
@@ -210,6 +214,7 @@ fn path_traversal_blocked_by_extract_dir_contents() {
     &mut tera,
     &make_context("app"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   );
   assert!(result.is_err(), "path traversal should be blocked");
 }
@@ -229,6 +234,7 @@ fn path_traversal_with_tera_file_blocked() {
     &mut tera,
     &make_context("app"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   );
   assert!(
     result.is_err(),
@@ -253,6 +259,7 @@ fn renders_all_three_case_variables() {
     &mut tera,
     &make_context("My_App"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   )
   .unwrap();
 
@@ -281,6 +288,7 @@ fn multiple_tera_files_rendered_independently() {
     &mut tera,
     &make_context("MyApp"),
     &make_app_context(),
+    &std::collections::HashSet::new(),
   )
   .unwrap();
 

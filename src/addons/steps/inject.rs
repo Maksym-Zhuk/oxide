@@ -5,25 +5,36 @@ use inquire::Select;
 
 use crate::addons::manifest::{IfNotFound, InjectStep};
 
-use super::{Rollback, render_lines, resolve_target};
+use super::{Rollback, render_string, resolve_target};
 
 pub fn execute_inject(
   step: &InjectStep,
   project_root: &Path,
   ctx: &tera::Context,
 ) -> Result<Vec<Rollback>> {
+  if step.after.is_some() && step.before.is_some() {
+    return Err(anyhow!(
+      "inject step cannot set both 'after' and 'before'; choose one marker"
+    ));
+  }
+
   let paths = resolve_target(&step.target, project_root)?;
-  let lines: Vec<String> = step.content.lines().map(str::to_string).collect();
-  let rendered = render_lines(&lines, ctx)?;
+  let rendered: Vec<String> = render_string(&step.content, ctx)?
+    .lines()
+    .map(str::to_string)
+    .collect();
 
   let mut rollbacks = Vec::new();
 
   for path in paths {
     let original = std::fs::read(&path)?;
-    let mut file_lines: Vec<String> = String::from_utf8_lossy(&original)
-      .lines()
-      .map(str::to_string)
-      .collect();
+    let text = std::str::from_utf8(&original).map_err(|_| {
+      anyhow!(
+        "{} is not valid UTF-8 (binary file); refusing to inject",
+        path.display()
+      )
+    })?;
+    let mut file_lines: Vec<String> = text.lines().map(str::to_string).collect();
 
     let marker = step.after.as_deref().or(step.before.as_deref());
 

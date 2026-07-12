@@ -1,9 +1,13 @@
 pub mod cache;
+pub mod catalog;
 pub mod detect;
+pub mod info;
 pub mod install;
+pub mod link;
 pub mod lock;
 pub mod manifest;
 pub mod publish;
 pub mod runner;
 pub mod steps;
+pub mod test;
 pub mod update;

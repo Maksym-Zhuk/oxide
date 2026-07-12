@@ -17,11 +17,14 @@ pub async fn record_template_use(ctx: &AppContext, template_name: &str) {
     return;
   };
   let url = format!("{}/template/{}/use", ctx.backend_url, template_name);
+  // Best-effort telemetry: keep it snappy so a slow network can't stall project
+  // creation under the "Finishing up..." spinner.
   if let Err(e) = ctx
     .client
     .post(&url)
     .bearer_auth(user.token)
     .header("Content-Type", "application/json")
+    .timeout(std::time::Duration::from_secs(3))
     .send()
     .await
   {
@@ -136,6 +139,15 @@ async fn get_template_info(
 }
 
 pub async fn install_template(ctx: &AppContext, template_name: &str) -> Result<InstallResult> {
+  // Locally-linked templates (`anesis template link`) live only in the cache and
+  // have no registry entry — use them as-is without contacting the backend.
+  let cached = get_cached_template(ctx, template_name)?;
+  if cached.as_ref().is_some_and(|c| c.commit_sha == "local")
+    && ctx.paths.templates.join(template_name).exists()
+  {
+    return Ok(InstallResult::UpToDate);
+  }
+
   let sp = spinner(format!("Fetching info for template '{template_name}'..."));
   let info = get_template_info(
     template_name,

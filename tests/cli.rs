@@ -38,12 +38,15 @@ fn template_help() {
 }
 
 #[test]
-fn template_install_missing_arg() {
+fn template_install_arg_is_optional() {
+  // Omitting the name is allowed — `template install` falls back to the
+  // interactive picker rather than erroring.
   cmd()
-    .args(["template", "install"])
+    .args(["template", "install", "--help"])
     .assert()
-    .failure()
-    .stderr(contains("TEMPLATE_NAME"));
+    .success()
+    .stdout(contains("[TEMPLATE_NAME]"))
+    .stdout(contains("pick interactively"));
 }
 
 #[test]
@@ -88,12 +91,15 @@ fn addon_help() {
 }
 
 #[test]
-fn addon_install_missing_arg() {
+fn addon_install_arg_is_optional() {
+  // Omitting the id is allowed — `addon install` falls back to the interactive
+  // picker rather than erroring.
   cmd()
-    .args(["addon", "install"])
+    .args(["addon", "install", "--help"])
     .assert()
-    .failure()
-    .stderr(contains("ADDON_ID"));
+    .success()
+    .stdout(contains("[ADDON_ID]"))
+    .stdout(contains("pick interactively"));
 }
 
 #[test]
@@ -132,12 +138,15 @@ fn new_missing_both_args() {
 }
 
 #[test]
-fn new_missing_template_arg() {
+fn new_template_arg_is_optional() {
+  // Omitting the template is allowed — `new` falls back to the interactive
+  // picker rather than erroring, so the positional renders as optional in help.
   cmd()
-    .args(["new", "my-project"])
+    .args(["new", "--help"])
     .assert()
-    .failure()
-    .stderr(contains("TEMPLATE_NAME"));
+    .success()
+    .stdout(contains("[TEMPLATE_NAME]"))
+    .stdout(contains("pick interactively"));
 }
 
 // ── auth subcommands ──────────────────────────────────────────────────────────
@@ -180,17 +189,19 @@ fn use_help() {
     .args(["use", "--help"])
     .assert()
     .success()
-    .stdout(contains("Run an installed addon command"))
-    .stdout(contains("anesis use <ADDON_ID> <COMMAND>"));
+    .stdout(contains("anesis use [ADDON_ID] [COMMAND]"));
 }
 
 #[test]
-fn use_without_args_shows_help() {
+fn use_addon_id_is_optional() {
+  // Omitting the addon id is allowed — `use` falls back to the interactive
+  // addon picker rather than erroring.
   cmd()
-    .arg("use")
+    .args(["use", "--help"])
     .assert()
-    .failure()
-    .stderr(contains("anesis use <ADDON_ID> <COMMAND>"));
+    .success()
+    .stdout(contains("[ADDON_ID]"))
+    .stdout(contains("pick interactively"));
 }
 
 #[test]

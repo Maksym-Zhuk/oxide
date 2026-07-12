@@ -15,7 +15,7 @@ pub struct UpdateTemplateDto {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct UpdateTemplateRsponse {
+pub struct UpdateTemplateResponse {
   pub message: String,
 }
 
@@ -29,7 +29,7 @@ pub async fn update(
   let user = get_auth_user(&ctx.paths.auth)?;
 
   let sp = spinner("Updating template in registry...");
-  let res: UpdateTemplateRsponse = ctx
+  let res: UpdateTemplateResponse = ctx
     .client
     .patch(format!("{}/template", ctx.backend_url))
     .bearer_auth(user.token)

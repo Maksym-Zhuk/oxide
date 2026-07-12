@@ -1,26 +1,28 @@
 use std::{collections::HashMap, fs, path::Path};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
+use colored::Colorize;
 use inquire::{Confirm, Select, Text};
-use reqwest::StatusCode;
 
 use crate::{
   context::AppContext,
   manifest::AnesisManifest,
   templates::generator::{to_camel_case, to_kebab_case, to_pascal_case, to_snake_case},
-  utils::{errors::AnesisError, ui::spinner},
+  utils::{
+    picker::{ItemKind, PickItem, pick_one},
+    ui::spinner,
+  },
 };
 
 use super::{
-  cache::is_addon_installed,
   detect::detect_variant,
-  install::{AddonInstallResult, install_addon, read_cached_manifest, record_addon_use},
+  install::{fetch_latest_version, install_addon, read_cached_manifest, record_addon_use},
   lock::{LockEntry, LockFile},
-  manifest::{InputDef, InputType},
+  manifest::{AddonCommand, InputDef, InputType},
   steps::{
     Rollback, append::execute_append, copy::execute_copy, create::execute_create,
     delete::execute_delete, inject::execute_inject, move_step::execute_move,
-    rename::execute_rename, replace::execute_replace,
+    packages::execute_packages, rename::execute_rename, replace::execute_replace, run::execute_run,
   },
 };
 use crate::addons::manifest::Step;
@@ -30,50 +32,56 @@ pub async fn run_addon_command(
   addon_id: &str,
   command_name: &str,
   project_root: &Path,
+  presets: &HashMap<String, String>,
+  non_interactive: bool,
+  dry_run: bool,
 ) -> Result<()> {
-  let addon_is_cached = super::cache::get_cached_addon(&ctx.paths.addons, addon_id)?.is_some();
-  let sp = spinner(format!("Checking addon '{addon_id}' for updates..."));
-  let install_result = match install_addon(ctx, addon_id).await {
-    Ok(install_result) => {
-      sp.finish_and_clear();
-      install_result
+  // A dry run never prompts and never writes; it collects inputs from presets
+  // and defaults, then prints the plan.
+  let non_interactive = non_interactive || dry_run;
+  let addon_dir = ctx.paths.addons.join(addon_id);
+  let cached = super::cache::get_cached_addon(&ctx.paths.addons, addon_id)?;
+
+  // If the addon is already cached, run from cache immediately and check for a newer
+  // version in the background — the network round-trip then overlaps with the
+  // interactive prompts below instead of blocking before anything runs.
+  // ponytail: this invocation runs the cached addon; a newer version (if any) is
+  // pulled into the cache at the end and used on the next run (npx-style).
+  let (manifest, update_check) = if let Some(cached) = cached.filter(|_| addon_dir.exists()) {
+    let manifest = read_cached_manifest(&ctx.paths.addons, addon_id)?;
+    let handle = tokio::spawn(super::install::check_addon_update(
+      ctx.client.clone(),
+      ctx.backend_url.clone(),
+      ctx.paths.auth.clone(),
+      addon_id.to_string(),
+      cached.commit_sha,
+    ));
+    (manifest, Some(handle))
+  } else {
+    // Not cached yet: we must download before we can run anything.
+    let sp = spinner(format!("Fetching addon '{addon_id}'..."));
+    let install_result = install_addon(ctx, addon_id)
+      .await
+      .inspect_err(|_| sp.finish_and_clear())?;
+    sp.finish_and_clear();
+    if let Some(message) = install_result.message(addon_id) {
+      println!("{message}");
     }
-    Err(err) if addon_is_cached && should_fallback_to_cached_manifest(&err) => {
-      sp.finish_and_clear();
-      eprintln!(
-        "Note: Could not check for addon updates ({}). Using cached version.",
-        err
-      );
-      AddonInstallResult::UpToDate(read_cached_manifest(&ctx.paths.addons, addon_id)?)
-    }
-    Err(err) => {
-      sp.finish_and_clear();
-      return Err(err);
-    }
+    (install_result.into_manifest(), None)
   };
-  if let Some(message) = install_result.update_message(addon_id) {
-    println!("{message}");
-  }
-  let manifest = install_result.into_manifest();
 
   let mut lock = LockFile::load(project_root)?;
 
   for dep_id in &manifest.requires {
-    if !is_addon_installed(&ctx.paths.addons, dep_id)? {
+    if !lock.addons.iter().any(|e| &e.id == dep_id) {
       return Err(anyhow!(
-        "Addon '{}' requires '{}' to be installed first. Run: anesis addon install {}",
+        "Addon '{}' requires '{}' to be applied in this project first. Run: anesis use {} <command>",
         addon_id,
         dep_id,
         dep_id
       ));
     }
   }
-
-  let mut input_values: HashMap<String, String> = HashMap::new();
-  collect_inputs(&manifest.inputs, &mut input_values)?;
-
-  let mut tera_ctx = tera::Context::new();
-  insert_with_derived(&mut tera_ctx, &input_values);
 
   let detected_id = detect_variant(&manifest.detect, project_root);
 
@@ -96,13 +104,17 @@ pub async fn run_addon_command(
       )
     })?;
 
-  if command.once && lock.is_command_executed(addon_id, command_name) {
+  if !dry_run && command.once && lock.is_command_executed(addon_id, command_name) {
     if let Some(prompt_message) = rerun_prompt_message(
       command_name,
       lock.addon_version(addon_id),
       &manifest.version,
     ) {
-      let rerun = Confirm::new(&prompt_message).with_default(false).prompt()?;
+      let rerun = if non_interactive {
+        false
+      } else {
+        Confirm::new(&prompt_message).with_default(false).prompt()?
+      };
       if !rerun {
         println!("Skipping command '{}'.", command_name);
         return Ok(());
@@ -128,18 +140,55 @@ pub async fn run_addon_command(
     }
   }
 
+  // Prompt for inputs only after the variant/command are resolved and the `once`
+  // and prerequisite-command checks have passed, so the user is never asked to
+  // fill in values for a command that will be skipped or rejected.
+  let mut tera_ctx = tera::Context::new();
+
+  let mut input_values: HashMap<String, String> = HashMap::new();
+  collect_inputs(
+    &manifest.inputs,
+    presets,
+    non_interactive,
+    &mut input_values,
+  )?;
+  insert_with_derived(&mut tera_ctx, &input_values);
+
   let mut cmd_input_values: HashMap<String, String> = HashMap::new();
-  collect_inputs(&command.inputs, &mut cmd_input_values)?;
+  collect_inputs(
+    &command.inputs,
+    presets,
+    non_interactive,
+    &mut cmd_input_values,
+  )?;
   insert_with_derived(&mut tera_ctx, &cmd_input_values);
 
-  if !confirm_addon_execution(addon_id, command_name, &command.steps)? {
+  if dry_run {
+    print_dry_run_plan(
+      addon_id,
+      command_name,
+      detected_id.as_deref(),
+      &input_values,
+      &cmd_input_values,
+      &command.steps,
+    );
+    return Ok(());
+  }
+
+  if !confirm_addon_execution(addon_id, command_name, &command.steps, non_interactive)? {
     println!("Aborted. No changes were made.");
     return Ok(());
   }
 
   let addon_dir = ctx.paths.addons.join(addon_id);
+  let total = command.steps.len();
   let mut completed_rollbacks: Vec<Rollback> = Vec::new();
   for (idx, step) in command.steps.iter().enumerate() {
+    let label = step_label(step);
+    // Announce each step before it runs so the user can see exactly where an
+    // addon stalls or fails, rather than staring at a silent hang.
+    println!("{} {}", format!("[{}/{}]", idx + 1, total).dimmed(), label);
+
     let result = match step {
       Step::Copy(s) => execute_copy(s, &addon_dir, project_root),
       Step::Create(s) => execute_create(s, project_root, &tera_ctx),
@@ -149,45 +198,69 @@ pub async fn run_addon_command(
       Step::Delete(s) => execute_delete(s, project_root),
       Step::Rename(s) => execute_rename(s, project_root, &tera_ctx),
       Step::Move(s) => execute_move(s, project_root, &tera_ctx),
-    };
+      Step::Packages(s) => execute_packages(s, project_root),
+      Step::Run(s) => execute_run(s, project_root, &tera_ctx, non_interactive),
+    }
+    // Naming the step here upgrades every bare error a step can raise (e.g. a
+    // `std::fs::read` "No such file or directory") into one that says which
+    // step and file it came from, so the user knows what to fix.
+    .with_context(|| format!("step {} ({}) failed", idx + 1, label));
 
     match result {
       Ok(rollbacks) => completed_rollbacks.extend(rollbacks),
       Err(err) => {
-        eprintln!("Step {} failed: {}", idx + 1, err);
-        let choice = Select::new(
-          "How would you like to proceed?",
-          vec!["Keep changes made so far", "Rollback all changes"],
-        )
-        .prompt()?;
+        eprintln!("{} {:#}", "✗".red().bold(), err);
+        // Non-interactive runs can't prompt; roll back to leave a clean tree.
+        let choice = if non_interactive {
+          "Rollback all changes"
+        } else {
+          Select::new(
+            "How would you like to proceed?",
+            vec!["Keep changes made so far", "Rollback all changes"],
+          )
+          .prompt()?
+        };
 
         if choice == "Rollback all changes" {
           for rollback in completed_rollbacks.into_iter().rev() {
             let _ = apply_rollback(rollback, project_root);
           }
+          println!("Rolled back all changes made by this command.");
         }
 
-        return Err(anyhow!("Addon command failed at step {}: {}", idx + 1, err));
+        return Err(err);
       }
     }
   }
 
   let variant_id = detected_id.unwrap_or_else(|| "universal".to_string());
-  let mut commands_executed = lock
-    .addons
-    .iter()
-    .find(|e| e.id == addon_id)
-    .map(|e| e.commands_executed.clone())
-    .unwrap_or_default();
-  if !commands_executed.iter().any(|c| c == command_name) {
-    commands_executed.push(command_name.to_string());
+  // Accumulate this run's inversions and inputs onto the addon's entry rather than
+  // replacing them, so `undo` reverts every command that ran and `update` can
+  // replay them all with the same inputs. Journal stays in execution order across
+  // commands, so reversing the whole thing unwinds them last-first.
+  if let Some(existing) = lock.addons.iter_mut().find(|e| e.id == addon_id) {
+    existing.version = manifest.version.clone();
+    existing.variant = variant_id;
+    existing.journal.extend(completed_rollbacks);
+    existing.inputs.extend(
+      input_values
+        .iter()
+        .chain(&cmd_input_values)
+        .map(|(k, v)| (k.clone(), v.clone())),
+    );
+  } else {
+    let mut inputs = input_values.clone();
+    inputs.extend(cmd_input_values.iter().map(|(k, v)| (k.clone(), v.clone())));
+    lock.addons.push(LockEntry {
+      id: addon_id.to_string(),
+      version: manifest.version.clone(),
+      variant: variant_id,
+      commands_executed: Vec::new(),
+      journal: completed_rollbacks,
+      inputs,
+    });
   }
-  lock.upsert_entry(LockEntry {
-    id: addon_id.to_string(),
-    version: manifest.version.clone(),
-    variant: variant_id,
-    commands_executed,
-  });
+  lock.mark_command_executed(addon_id, command_name);
   lock.save(project_root)?;
 
   record_addon_use(ctx, addon_id).await;
@@ -196,15 +269,199 @@ pub async fn run_addon_command(
     eprintln!("Note: could not update anesis.json ({err}).");
   }
   println!("✓ Command '{}' completed successfully.", command_name);
+
+  // The command ran on the cached addon; if the background check found a newer
+  // version, pull it into the cache now (execution is finished, so re-extracting is
+  // safe) so the next run picks it up.
+  if let Some(handle) = update_check
+    && matches!(handle.await, Ok(Some(_)))
+  {
+    let sp = spinner(format!(
+      "A newer version of '{addon_id}' is available, updating..."
+    ));
+    let updated = install_addon(ctx, addon_id).await;
+    sp.finish_and_clear();
+    match updated {
+      Ok(result) => {
+        if let Some(message) = result.update_message(addon_id) {
+          println!("{message} (will be used next time)");
+        }
+      }
+      Err(err) => eprintln!("Note: could not update addon '{addon_id}' ({err})."),
+    }
+  }
+
   Ok(())
 }
 
-fn confirm_addon_execution(addon_id: &str, command_name: &str, steps: &[Step]) -> Result<bool> {
+/// Prints the commands an addon exposes for the current project. Used by
+/// `anesis use <addon>` when no command name is given, so users can discover
+/// what's runnable without having to read the manifest.
+pub async fn list_addon_commands(
+  ctx: &AppContext,
+  addon_id: &str,
+  project_root: &Path,
+  presets: &HashMap<String, String>,
+  non_interactive: bool,
+  dry_run: bool,
+) -> Result<()> {
+  let addon_dir = ctx.paths.addons.join(addon_id);
+  let cached = super::cache::get_cached_addon(&ctx.paths.addons, addon_id)?;
+  let manifest = if cached.is_some() && addon_dir.exists() {
+    read_cached_manifest(&ctx.paths.addons, addon_id)?
+  } else {
+    let sp = spinner(format!("Fetching addon '{addon_id}'..."));
+    let result = install_addon(ctx, addon_id)
+      .await
+      .inspect_err(|_| sp.finish_and_clear())?;
+    sp.finish_and_clear();
+    result.into_manifest()
+  };
+
+  // Show commands for the variant matching this project; fall back to every
+  // command across all variants when nothing matches (e.g. run outside a project).
+  let detected_id = detect_variant(&manifest.detect, project_root);
+  let matched = manifest
+    .variants
+    .iter()
+    .find(|v| v.when.as_deref() == detected_id.as_deref())
+    .or_else(|| manifest.variants.iter().find(|v| v.when.is_none()));
+  let commands: Vec<&AddonCommand> = match matched {
+    Some(variant) => variant.commands.iter().collect(),
+    None => manifest.variants.iter().flat_map(|v| &v.commands).collect(),
+  };
+
+  if commands.is_empty() {
+    println!("Addon '{addon_id}' has no commands available for this project.");
+    return Ok(());
+  }
+
+  // Let the user pick a command interactively, then run the chosen one.
+  let items: Vec<PickItem> = commands
+    .iter()
+    .map(|c| PickItem {
+      kind: ItemKind::Addon,
+      id: c.name.clone(),
+      name: c.name.clone(),
+      meta: String::new(),
+      description: c.description.clone(),
+      haystack: format!("{} {}", c.name, c.description).to_lowercase(),
+    })
+    .collect();
+
+  match pick_one(
+    items,
+    format!("Commands for {addon_id}"),
+    false,
+    String::new(),
+  )
+  .await?
+  {
+    Some((_, command_name, _)) => {
+      run_addon_command(
+        ctx,
+        addon_id,
+        &command_name,
+        project_root,
+        presets,
+        non_interactive,
+        dry_run,
+      )
+      .await
+    }
+    None => Ok(()),
+  }
+}
+
+/// A short human-readable description of what a step does, used both for the
+/// per-step progress line and for error context so the user can see which file
+/// a failure came from.
+fn step_label(step: &Step) -> String {
+  use crate::addons::manifest::Target;
+  fn target(t: &Target) -> &str {
+    match t {
+      Target::File { file } => file,
+      Target::Glob { glob } => glob,
+    }
+  }
+  match step {
+    Step::Copy(s) => format!("copy '{}' → '{}'", s.src, s.dest),
+    Step::Create(s) => format!("create '{}'", s.path),
+    Step::Inject(s) => format!("inject into '{}'", target(&s.target)),
+    Step::Replace(s) => format!("replace in '{}'", target(&s.target)),
+    Step::Append(s) => format!("append to '{}'", target(&s.target)),
+    Step::Delete(s) => format!("delete '{}'", target(&s.target)),
+    Step::Rename(s) => format!("rename '{}' → '{}'", s.from, s.to),
+    Step::Move(s) => format!("move '{}' → '{}'", s.from, s.to),
+    Step::Packages(s) => format!(
+      "install {} package(s)",
+      s.dependencies.len() + s.dev_dependencies.len()
+    ),
+    Step::Run(s) => format!("run '{}'", s.command),
+  }
+}
+
+/// Prints the resolved plan for `--dry-run`: the selected variant, the inputs
+/// that were collected (from presets/defaults), and each step in order. Writes
+/// nothing to disk.
+fn print_dry_run_plan(
+  addon_id: &str,
+  command_name: &str,
+  variant: Option<&str>,
+  addon_inputs: &HashMap<String, String>,
+  cmd_inputs: &HashMap<String, String>,
+  steps: &[Step],
+) {
+  println!(
+    "{} {} {}",
+    "Dry run:".bold(),
+    addon_id.cyan(),
+    command_name.cyan()
+  );
+  println!(
+    "  {} {}",
+    "variant:".dimmed(),
+    variant.unwrap_or("universal")
+  );
+
+  let mut inputs: Vec<(&String, &String)> = addon_inputs.iter().chain(cmd_inputs.iter()).collect();
+  inputs.sort_by(|a, b| a.0.cmp(b.0));
+  if inputs.is_empty() {
+    println!("  {} (none)", "inputs:".dimmed());
+  } else {
+    println!("  {}", "inputs:".dimmed());
+    for (k, v) in inputs {
+      println!("    {k} = {v}");
+    }
+  }
+
+  println!("  {} {} step(s)", "steps:".dimmed(), steps.len());
+  for (idx, step) in steps.iter().enumerate() {
+    println!(
+      "    {} {}",
+      format!("[{}/{}]", idx + 1, steps.len()).dimmed(),
+      step_label(step)
+    );
+  }
+  println!("\nNo files were changed.");
+}
+
+fn confirm_addon_execution(
+  addon_id: &str,
+  command_name: &str,
+  steps: &[Step],
+  non_interactive: bool,
+) -> Result<bool> {
+  if non_interactive {
+    return Ok(true);
+  }
   let (mut writes, mut edits, mut removes) = (0usize, 0usize, 0usize);
   for step in steps {
     match step {
       Step::Create(_) | Step::Copy(_) => writes += 1,
-      Step::Inject(_) | Step::Replace(_) | Step::Append(_) => edits += 1,
+      Step::Inject(_) | Step::Replace(_) | Step::Append(_) | Step::Packages(_) | Step::Run(_) => {
+        edits += 1
+      }
       Step::Delete(_) | Step::Rename(_) | Step::Move(_) => removes += 1,
     }
   }
@@ -219,39 +476,6 @@ fn confirm_addon_execution(addon_id: &str, command_name: &str, steps: &[Step]) -
   );
 
   Ok(Confirm::new("Proceed?").with_default(false).prompt()?)
-}
-
-fn should_fallback_to_cached_manifest(error: &anyhow::Error) -> bool {
-  if error.chain().any(|e| {
-    e.downcast_ref::<AnesisError>().is_some_and(|e| {
-      matches!(
-        e,
-        AnesisError::NotLoggedIn
-          | AnesisError::HttpUnauthorized
-          | AnesisError::NetworkTimeout
-          | AnesisError::NetworkConnect
-      )
-    })
-  }) {
-    return true;
-  }
-
-  error.chain().any(|source| {
-    source
-      .downcast_ref::<reqwest::Error>()
-      .is_some_and(|reqwest_error| {
-        reqwest_error.is_connect()
-          || reqwest_error.is_timeout()
-          || reqwest_error.status().is_some_and(|status| {
-            matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
-          })
-      })
-  })
-}
-
-#[doc(hidden)]
-pub fn should_fallback_to_cached_manifest_for_tests(error: &anyhow::Error) -> bool {
-  should_fallback_to_cached_manifest(error)
 }
 
 fn rerun_prompt_message(
@@ -279,16 +503,54 @@ pub fn rerun_prompt_message_for_tests(
   rerun_prompt_message(command_name, locked_version, current_version)
 }
 
-fn collect_inputs(inputs: &[InputDef], map: &mut HashMap<String, String>) -> Result<()> {
+/// Resolves input values: a preset (`--input`) wins, else the default; in
+/// interactive mode a missing value is prompted, otherwise a required input with
+/// no default is an error. Shared by the addon runner and template scaffolding.
+pub fn collect_inputs(
+  inputs: &[InputDef],
+  presets: &HashMap<String, String>,
+  non_interactive: bool,
+  map: &mut HashMap<String, String>,
+) -> Result<()> {
+  let mut missing: Vec<&str> = Vec::new();
   for input in inputs {
+    // A value passed via --input always wins, in both interactive and
+    // non-interactive modes, and is never re-prompted.
+    if let Some(preset) = presets.get(&input.name) {
+      map.insert(input.name.clone(), preset.clone());
+      continue;
+    }
+    if non_interactive {
+      // No preset: fall back to the default. A required input without a
+      // default can't be resolved without a prompt, so collect it and error.
+      match &input.default {
+        Some(default) => {
+          map.insert(input.name.clone(), default.clone());
+        }
+        None if input.required => missing.push(&input.name),
+        None => {
+          let fallback = match input.input_type {
+            InputType::Boolean => "false".to_string(),
+            _ => String::new(),
+          };
+          map.insert(input.name.clone(), fallback);
+        }
+      }
+      continue;
+    }
     let value = match input.input_type {
-      InputType::Text => {
+      InputType::Text => loop {
         let mut prompt = Text::new(&input.description);
         if let Some(ref default) = input.default {
           prompt = prompt.with_default(default);
         }
-        prompt.prompt()?
-      }
+        let value = prompt.prompt()?;
+        if input.required && value.trim().is_empty() {
+          eprintln!("'{}' is required; please enter a value.", input.name);
+          continue;
+        }
+        break value;
+      },
       InputType::Boolean => {
         let default = input
           .default
@@ -306,6 +568,12 @@ fn collect_inputs(inputs: &[InputDef], map: &mut HashMap<String, String>) -> Res
     };
     map.insert(input.name.clone(), value);
   }
+  if !missing.is_empty() {
+    return Err(anyhow!(
+      "Missing required input(s) in non-interactive mode: {}. Provide them with --input NAME=VALUE.",
+      missing.join(", ")
+    ));
+  }
   Ok(())
 }
 
@@ -319,27 +587,226 @@ fn insert_with_derived(ctx: &mut tera::Context, map: &HashMap<String, String>) {
   }
 }
 
+/// Removes now-empty directories walking up from `start` toward (but not
+/// including) `project_root`, stopping at the first non-empty or undeletable
+/// directory. Used to clean up parent directories that a step's
+/// `create_dir_all` left behind once its file is removed/moved back.
+fn prune_empty_dirs(start: Option<&Path>, project_root: &Path) {
+  let mut dir = start;
+  while let Some(d) = dir {
+    if d == project_root || fs::remove_dir(d).is_err() {
+      break;
+    }
+    dir = d.parent();
+  }
+}
+
+/// Reverts the last applied command-set of `addon_id` by replaying its stored
+/// inversion journal in reverse. Any file that no longer exists is reported as a
+/// conflict; unless `non_interactive`, the user is asked to confirm before the
+/// journal is applied.
+// ponytail: conflict detection is existence-only — we don't store post-apply
+// hashes, so a file edited-in-place after the addon ran is silently overwritten
+// back to its pre-addon content. Store an expected-content hash per RestoreFile
+// if that ceiling ever bites.
+pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) -> Result<()> {
+  let mut lock = LockFile::load(project_root)?;
+  let entry = lock
+    .addons
+    .iter()
+    .find(|e| e.id == addon_id)
+    .filter(|e| !e.journal.is_empty())
+    .ok_or_else(|| {
+      anyhow!("Addon '{addon_id}' has no undoable changes recorded in this project.")
+    })?;
+
+  let mut conflicts: Vec<String> = Vec::new();
+  for rollback in &entry.journal {
+    match rollback {
+      Rollback::DeleteCreatedFile { path } if !path.exists() => {
+        conflicts.push(format!("{} (already deleted)", path.display()));
+      }
+      Rollback::RestoreFile { path, .. } if !path.exists() => {
+        conflicts.push(format!("{} (missing)", path.display()));
+      }
+      Rollback::RenameFile { to, .. } if !to.exists() => {
+        conflicts.push(format!("{} (missing)", to.display()));
+      }
+      _ => {}
+    }
+  }
+
+  if !conflicts.is_empty() {
+    eprintln!(
+      "{} some files changed since '{addon_id}' was applied:",
+      "⚠".yellow().bold()
+    );
+    for c in &conflicts {
+      eprintln!("  {c}");
+    }
+  }
+
+  if !non_interactive
+    && !Confirm::new(&format!("Undo addon '{addon_id}'?"))
+      .with_default(conflicts.is_empty())
+      .prompt()?
+  {
+    println!("Aborted. No changes were made.");
+    return Ok(());
+  }
+
+  let entry = lock.addons.iter_mut().find(|e| e.id == addon_id).unwrap();
+  let journal = std::mem::take(&mut entry.journal);
+  for rollback in journal.into_iter().rev() {
+    apply_rollback(rollback, project_root)?;
+  }
+
+  lock.remove_addon(addon_id);
+  lock.save(project_root)?;
+
+  if let Err(err) = AnesisManifest::remove_addon(addon_id, project_root) {
+    eprintln!("Note: could not update anesis.json ({err}).");
+  }
+
+  println!("✓ Reverted addon '{addon_id}'.");
+  Ok(())
+}
+
+/// True if `latest` is a strictly newer semver than `current`. Falls back to a
+/// plain string inequality if either version can't be parsed as semver, so a
+/// non-standard version scheme still flags *some* change rather than none.
+fn is_newer(latest: &str, current: &str) -> bool {
+  match (
+    semver::Version::parse(latest),
+    semver::Version::parse(current),
+  ) {
+    (Ok(l), Ok(c)) => l > c,
+    _ => latest != current,
+  }
+}
+
+#[doc(hidden)]
+pub fn is_newer_for_tests(latest: &str, current: &str) -> bool {
+  is_newer(latest, current)
+}
+
+/// Compares each applied addon's locked version against the registry's latest and
+/// prints the ones that have a newer version available.
+pub async fn outdated(ctx: &AppContext, project_root: &Path) -> Result<()> {
+  let lock = LockFile::load(project_root)?;
+  if lock.addons.is_empty() {
+    println!("No addons applied in this project.");
+    return Ok(());
+  }
+
+  let mut any = false;
+  for entry in &lock.addons {
+    match fetch_latest_version(ctx, &entry.id).await {
+      Ok(latest) if is_newer(&latest, &entry.version) => {
+        any = true;
+        println!(
+          "  {} v{} → v{}",
+          entry.id.cyan(),
+          entry.version,
+          latest.green()
+        );
+      }
+      Ok(_) => {}
+      Err(err) => eprintln!("  {} (could not check: {err:#})", entry.id.dimmed()),
+    }
+  }
+  if !any {
+    println!("All addons are up to date.");
+  } else {
+    println!("\nRun `anesis update <addon_id>` to upgrade.");
+  }
+  Ok(())
+}
+
+/// Upgrades an applied addon to the registry's latest version: reverts the old
+/// version's changes, installs the new one, then replays the same commands with
+/// the inputs saved in `anesis.lock`.
+pub async fn update_addon(
+  ctx: &AppContext,
+  addon_id: &str,
+  project_root: &Path,
+  non_interactive: bool,
+) -> Result<()> {
+  let (current, commands, saved_inputs, had_journal) = {
+    let lock = LockFile::load(project_root)?;
+    let entry = lock
+      .addons
+      .iter()
+      .find(|e| e.id == addon_id)
+      .ok_or_else(|| anyhow!("Addon '{addon_id}' is not applied in this project."))?;
+    (
+      entry.version.clone(),
+      entry.commands_executed.clone(),
+      entry.inputs.clone(),
+      !entry.journal.is_empty(),
+    )
+  };
+
+  let latest = fetch_latest_version(ctx, addon_id).await?;
+  if !is_newer(&latest, &current) {
+    println!("Addon '{addon_id}' is already up to date (v{current}).");
+    return Ok(());
+  }
+
+  println!("Updating '{addon_id}' v{current} → v{latest}...");
+
+  // Revert the old version (implied by the update, so don't re-prompt), then make
+  // sure the new version is in the cache before replaying.
+  if had_journal {
+    undo_addon(addon_id, project_root, true)?;
+  } else {
+    // No reversible changes recorded — just drop the stale lock entry so the
+    // replay below isn't skipped by the `once` guard.
+    let mut lock = LockFile::load(project_root)?;
+    lock.remove_addon(addon_id);
+    lock.save(project_root)?;
+    let _ = AnesisManifest::remove_addon(addon_id, project_root);
+  }
+  install_addon(ctx, addon_id).await?;
+
+  for cmd in &commands {
+    run_addon_command(
+      ctx,
+      addon_id,
+      cmd,
+      project_root,
+      &saved_inputs,
+      non_interactive,
+      false,
+    )
+    .await?;
+  }
+
+  println!("✓ Updated '{addon_id}' to v{latest}.");
+  Ok(())
+}
+
 fn apply_rollback(rollback: Rollback, project_root: &Path) -> Result<()> {
   match rollback {
     Rollback::DeleteCreatedFile { path } => {
       let _ = std::fs::remove_file(&path);
-      let mut dir = path.parent();
-      while let Some(d) = dir {
-        if d == project_root {
-          break;
-        }
-
-        if fs::remove_dir(d).is_err() {
-          break;
-        }
-        dir = d.parent()
-      }
+      prune_empty_dirs(path.parent(), project_root);
     }
     Rollback::RestoreFile { path, original } => {
       std::fs::write(path, original)?;
     }
     Rollback::RenameFile { from, to } => {
-      std::fs::rename(from, to)?;
+      std::fs::rename(&from, to)?;
+      // `from` was the move/copy destination; its parent dirs may have been
+      // created just for it and are now empty.
+      prune_empty_dirs(from.parent(), project_root);
+    }
+    Rollback::IrreversibleRun { command } => {
+      eprintln!(
+        "{} could not undo shell command '{}' — its effects remain.",
+        "⚠".yellow().bold(),
+        command
+      );
     }
   }
   Ok(())

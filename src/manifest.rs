@@ -50,4 +50,22 @@ impl AnesisManifest {
     }
     Ok(())
   }
+
+  pub fn remove_addon(addon_name: &str, project_root: &Path) -> Result<()> {
+    let path = project_root.join("anesis.json");
+    if !path.exists() {
+      return Ok(());
+    }
+
+    let contents = fs::read_to_string(&path)?;
+    let mut anesis_json: AnesisManifest = serde_json::from_str(&contents)?;
+
+    let before = anesis_json.addons.len();
+    anesis_json.addons.retain(|a| a != addon_name);
+    if anesis_json.addons.len() != before {
+      let bytes = serde_json::to_vec_pretty(&anesis_json)?;
+      fs::write(&path, bytes)?;
+    }
+    Ok(())
+  }
 }

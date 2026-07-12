@@ -19,9 +19,8 @@ pub use anesis::templates::install::classify_install_state_for_tests as template
 
 // Addon utilities
 pub use anesis::addons::install::classify_install_state_for_tests as addon_classify_install_state_for_tests;
-pub use anesis::addons::runner::{
-  rerun_prompt_message_for_tests, should_fallback_to_cached_manifest_for_tests,
-};
+pub use anesis::addons::runner::is_newer_for_tests;
+pub use anesis::addons::runner::rerun_prompt_message_for_tests;
 
 // Upgrade utilities
 pub use anesis::upgrade::{

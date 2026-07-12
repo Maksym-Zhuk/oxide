@@ -5,7 +5,7 @@ use inquire::Confirm;
 
 use crate::addons::manifest::{CreateStep, IfExists};
 
-use super::{Rollback, render_lines};
+use super::Rollback;
 
 pub fn execute_create(
   step: &CreateStep,
@@ -14,8 +14,10 @@ pub fn execute_create(
 ) -> Result<Vec<Rollback>> {
   let rendered_path = super::render_string(&step.path, ctx)?;
   let path = super::safe_join(project_root, &rendered_path, "create path")?;
-  let lines: Vec<String> = step.content.lines().map(str::to_string).collect();
-  let content = render_lines(&lines, ctx)?.join("\n");
+  let mut content = super::render_string(&step.content, ctx)?;
+  if !content.is_empty() && !content.ends_with('\n') {
+    content.push('\n');
+  }
 
   let mut rollbacks = Vec::new();
 

@@ -1,7 +1,9 @@
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+
+use super::steps::Rollback;
 
 const LOCK_FILE_NAME: &str = "anesis.lock";
 
@@ -16,6 +18,14 @@ pub struct LockEntry {
   pub version: String,
   pub variant: String,
   pub commands_executed: Vec<String>,
+  // Inversions from every applied command, in execution order. `undo` replays them
+  // in reverse. `#[serde(default)]` keeps pre-1.4 locks parseable.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub journal: Vec<Rollback>,
+  // Inputs collected across this addon's commands, so `update` can replay them
+  // non-interactively. `#[serde(default)]` keeps pre-2.3 locks parseable.
+  #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+  pub inputs: HashMap<String, String>,
 }
 
 impl LockFile {
@@ -59,6 +69,10 @@ impl LockFile {
     {
       entry.commands_executed.push(command.to_string());
     }
+  }
+
+  pub fn remove_addon(&mut self, addon_id: &str) {
+    self.addons.retain(|e| e.id != addon_id);
   }
 
   pub fn upsert_entry(&mut self, entry: LockEntry) {

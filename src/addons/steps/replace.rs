@@ -5,7 +5,7 @@ use inquire::Select;
 
 use crate::addons::manifest::{IfNotFound, ReplaceStep};
 
-use super::{Rollback, render_lines, resolve_target};
+use super::{Rollback, render_string, resolve_target};
 
 pub fn execute_replace(
   step: &ReplaceStep,
@@ -13,14 +13,20 @@ pub fn execute_replace(
   ctx: &tera::Context,
 ) -> Result<Vec<Rollback>> {
   let paths = resolve_target(&step.target, project_root)?;
-  let replace_lines: Vec<String> = step.replace.lines().map(str::to_string).collect();
-  let rendered_replace = render_lines(&replace_lines, ctx)?.join("\n");
+  let rendered_replace = render_string(&step.replace, ctx)?;
 
   let mut rollbacks = Vec::new();
 
   for path in paths {
     let original = std::fs::read(&path)?;
-    let content = String::from_utf8_lossy(&original).to_string();
+    let content = std::str::from_utf8(&original)
+      .map_err(|_| {
+        anyhow!(
+          "{} is not valid UTF-8 (binary file); refusing to replace",
+          path.display()
+        )
+      })?
+      .to_string();
 
     if !content.contains(&step.find) {
       match step.if_not_found {

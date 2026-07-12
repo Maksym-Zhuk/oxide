@@ -1,6 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 
 pub mod append;
 pub mod copy;
@@ -8,20 +9,21 @@ pub mod create;
 pub mod delete;
 pub mod inject;
 pub mod move_step;
+pub mod packages;
 pub mod rename;
 pub mod replace;
+pub mod run;
 
+// ponytail: `original` serializes as a JSON byte array in anesis.lock — verbose
+// but correct for any file content. Swap to base64 if lock size ever matters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Rollback {
   DeleteCreatedFile { path: PathBuf },
   RestoreFile { path: PathBuf, original: Vec<u8> },
   RenameFile { from: PathBuf, to: PathBuf },
-}
-
-pub fn render_lines(lines: &[String], ctx: &tera::Context) -> Result<Vec<String>> {
-  lines
-    .iter()
-    .map(|line| tera::Tera::one_off(line, ctx, false).map_err(Into::into))
-    .collect()
+  // A `run` step executed a shell command; its effects can't be reversed, so undo
+  // only warns.
+  IrreversibleRun { command: String },
 }
 
 pub fn render_string(s: &str, ctx: &tera::Context) -> Result<String> {

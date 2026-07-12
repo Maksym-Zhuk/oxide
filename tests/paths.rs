@@ -63,7 +63,6 @@ fn ensure_directories_creates_cache_dir() {
   let dir = assert_fs::TempDir::new().unwrap();
   let paths = AnesisPaths {
     home: dir.path().to_path_buf(),
-    config: dir.path().join("config.json"),
     version_check: dir.path().join("version_check.json"),
     cache: dir.path().join("cache"),
     templates: dir.path().join("cache").join("templates"),
@@ -86,7 +85,6 @@ fn ensure_directories_creates_templates_dir() {
   let dir = assert_fs::TempDir::new().unwrap();
   let paths = AnesisPaths {
     home: dir.path().to_path_buf(),
-    config: dir.path().join("config.json"),
     version_check: dir.path().join("version_check.json"),
     cache: dir.path().join("cache"),
     templates: dir.path().join("cache").join("templates"),
@@ -109,7 +107,6 @@ fn ensure_directories_creates_addons_dir() {
   let dir = assert_fs::TempDir::new().unwrap();
   let paths = AnesisPaths {
     home: dir.path().to_path_buf(),
-    config: dir.path().join("config.json"),
     version_check: dir.path().join("version_check.json"),
     cache: dir.path().join("cache"),
     templates: dir.path().join("cache").join("templates"),
@@ -132,7 +129,6 @@ fn ensure_directories_is_idempotent() {
   let dir = assert_fs::TempDir::new().unwrap();
   let paths = AnesisPaths {
     home: dir.path().to_path_buf(),
-    config: dir.path().join("config.json"),
     version_check: dir.path().join("version_check.json"),
     cache: dir.path().join("cache"),
     templates: dir.path().join("cache").join("templates"),

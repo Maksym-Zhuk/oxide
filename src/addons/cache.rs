@@ -2,10 +2,14 @@ use std::{fs, path::Path};
 
 use anyhow::Result;
 use chrono::Utc;
-use comfy_table::{Attribute, Cell, Table};
+use comfy_table::{Attribute, Cell};
 use serde::{Deserialize, Serialize};
 
 use super::manifest::AddonManifest;
+use crate::utils::{
+  picker::{ItemKind, PickItem},
+  ui::catalog_table,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AddonsCache {
@@ -24,7 +28,31 @@ pub struct CachedAddon {
   pub repo_url: String,
 }
 
-fn read_cache(addons_dir: &Path) -> Result<AddonsCache> {
+impl CachedAddon {
+  /// Interactive-picker row for a locally cached addon.
+  pub fn to_pick_item(&self) -> PickItem {
+    let meta = if self.version.is_empty() {
+      String::new()
+    } else {
+      format!(" · v{}", self.version)
+    };
+    PickItem {
+      kind: ItemKind::Addon,
+      id: self.id.clone(),
+      name: self.name.clone(),
+      meta,
+      description: String::new(),
+      haystack: format!("{} {}", self.id, self.name).to_lowercase(),
+    }
+  }
+}
+
+/// Reads the locally cached addons (the `--installed` picker source).
+pub fn read_installed_addons(addons_dir: &Path) -> Result<Vec<CachedAddon>> {
+  Ok(read_cache(addons_dir)?.addons)
+}
+
+pub fn read_cache(addons_dir: &Path) -> Result<AddonsCache> {
   let index = addons_dir.join("anesis-addons.json");
   if index.exists() {
     let content = fs::read_to_string(&index)?;
@@ -100,7 +128,7 @@ pub fn get_installed_addons(addons_dir: &Path) -> Result<()> {
     return Ok(());
   }
 
-  let mut table = Table::new();
+  let mut table = catalog_table();
   table.set_header(vec![
     Cell::new("ID").add_attribute(Attribute::Bold),
     Cell::new("Name").add_attribute(Attribute::Bold),

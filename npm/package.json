@@ -1,21 +1,21 @@
 {
-	"name": "anesis-cli",
-	"version": "0.11.0",
-	"binaryVersion": "0.11.0",
-	"description": "CLI for scaffolding projects from remote templates and extending them with project addons",
-	"homepage": "https://github.com/anesis-dev/anesis",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/anesis-dev/anesis.git"
-	},
-	"license": "SEE LICENSE IN LICENSE.md",
-	"bin": {
-		"anesis": "wrapper.js"
-	},
-	"scripts": {
-		"postinstall": "node install.js"
-	},
-	"engines": {
-		"node": ">=18"
-	}
+    "name": "anesis-cli",
+    "version": "0.12.0",
+    "binaryVersion": "0.12.0",
+    "description": "CLI for scaffolding projects from remote templates and extending them with project addons",
+    "homepage": "https://github.com/anesis-dev/anesis",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/anesis-dev/anesis.git"
+    },
+    "license": "SEE LICENSE IN LICENSE.md",
+    "bin": {
+        "anesis": "wrapper.js"
+    },
+    "scripts": {
+        "postinstall": "node install.js"
+    },
+    "engines": {
+        "node": ">=18"
+    }
 }

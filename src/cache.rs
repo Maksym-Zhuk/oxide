@@ -2,10 +2,17 @@ use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use comfy_table::{Attribute, Cell, Table};
+use comfy_table::{Attribute, Cell};
 use serde::{Deserialize, Serialize};
 
-use crate::{context::AppContext, templates::AnesisTemplate};
+use crate::{
+  context::AppContext,
+  templates::AnesisTemplate,
+  utils::{
+    picker::{ItemKind, PickItem},
+    ui::catalog_table,
+  },
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct TemplatesCache {
@@ -21,6 +28,37 @@ pub struct CachedTemplate {
   pub source: String,
   pub path: String,
   pub commit_sha: String,
+}
+
+impl CachedTemplate {
+  /// Interactive-picker row for a locally cached template. No description is
+  /// stored locally, so the picker falls back to the name for the body line.
+  pub fn to_pick_item(&self) -> PickItem {
+    let meta = if self.version.is_empty() {
+      String::new()
+    } else {
+      format!(" · v{}", self.version)
+    };
+    PickItem {
+      kind: ItemKind::Template,
+      id: self.name.clone(),
+      name: self.name.clone(),
+      meta,
+      description: String::new(),
+      haystack: format!("{} {}", self.name, self.source).to_lowercase(),
+    }
+  }
+}
+
+/// Reads the locally cached templates (the `--installed` picker source).
+pub fn read_installed_templates(template_path: &Path) -> Result<Vec<CachedTemplate>> {
+  let templates_json = template_path.join("anesis-templates.json");
+  if !templates_json.exists() {
+    return Ok(Vec::new());
+  }
+  let content = fs::read_to_string(&templates_json)?;
+  let cache: TemplatesCache = serde_json::from_str(&content)?;
+  Ok(cache.templates)
 }
 
 pub fn update_templates_cache(
@@ -164,7 +202,7 @@ pub fn get_installed_templates(template_path: &Path) -> Result<()> {
     return Ok(());
   }
 
-  let mut table = Table::new();
+  let mut table = catalog_table();
 
   table.set_header(vec![
     Cell::new("Name").add_attribute(Attribute::Bold),
@@ -187,30 +225,4 @@ pub fn get_installed_templates(template_path: &Path) -> Result<()> {
   println!("{table}");
 
   Ok(())
-}
-
-pub fn is_template_installed(ctx: &AppContext, template_name: &str) -> Result<bool> {
-  let templates_json = ctx.paths.templates.join("anesis-templates.json");
-
-  let templates_info: TemplatesCache = if templates_json.exists() {
-    let content = fs::read_to_string(&templates_json)?;
-    serde_json::from_str(&content)?
-  } else {
-    TemplatesCache {
-      last_updated: Utc::now().to_rfc3339(),
-      templates: Vec::new(),
-    }
-  };
-
-  let path = Path::new(template_name);
-  if !ctx.paths.templates.join(path).exists() {
-    return Ok(false);
-  }
-
-  Ok(
-    templates_info
-      .templates
-      .iter()
-      .any(|t| t.name == template_name),
-  )
 }

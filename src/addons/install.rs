@@ -1,6 +1,7 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use reqwest::Client;
 use serde::Deserialize;
 
 use crate::{
@@ -19,11 +20,14 @@ pub async fn record_addon_use(ctx: &AppContext, addon_id: &str) {
     return;
   };
   let url = format!("{}/addon/{}/use", ctx.backend_url, addon_id);
+  // Best-effort telemetry: short timeout so a slow network can't stall the
+  // command after its work is already done.
   if let Err(e) = ctx
     .client
     .post(&url)
     .bearer_auth(user.token)
     .header("Content-Type", "application/json")
+    .timeout(std::time::Duration::from_secs(3))
     .send()
     .await
   {
@@ -38,6 +42,8 @@ struct AddonUrlResponse {
   archive_token: Option<String>,
   commit_sha: String,
   subdir: Option<String>,
+  #[serde(default)]
+  version: String,
 }
 
 #[derive(Debug)]
@@ -121,11 +127,19 @@ pub fn classify_install_state_for_tests(
 }
 
 async fn get_addon_url(ctx: &AppContext, addon_id: &str) -> Result<AddonUrlResponse> {
-  let user = get_auth_user(&ctx.paths.auth)?;
+  get_addon_url_raw(&ctx.client, &ctx.backend_url, &ctx.paths.auth, addon_id).await
+}
 
-  let response = ctx
-    .client
-    .get(format!("{}/addon/{addon_id}/url", ctx.backend_url))
+async fn get_addon_url_raw(
+  client: &Client,
+  backend_url: &str,
+  auth_path: &Path,
+  addon_id: &str,
+) -> Result<AddonUrlResponse> {
+  let user = get_auth_user(auth_path)?;
+
+  let response = client
+    .get(format!("{backend_url}/addon/{addon_id}/url"))
     .bearer_auth(user.token)
     .header("Content-Type", "application/json")
     .send()
@@ -224,6 +238,34 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
     InstallState::Update => AddonInstallResult::Updated(manifest),
     InstallState::UpToDate => unreachable!("up-to-date addons should return early"),
   })
+}
+
+/// Network-only update check, suitable for running in a background task while the
+/// cached addon is being used. Returns `Some(latest_sha)` if the backend reports a
+/// commit different from `cached_sha`, otherwise `None` (including on any error, so a
+/// flaky network never blocks or fails the command in progress).
+pub async fn check_addon_update(
+  client: Client,
+  backend_url: String,
+  auth_path: PathBuf,
+  addon_id: String,
+  cached_sha: String,
+) -> Option<String> {
+  // Locally-linked addons (`anesis addon link`) have no registry entry; never try
+  // to "update" them from the backend.
+  if cached_sha == "local" {
+    return None;
+  }
+  let info = get_addon_url_raw(&client, &backend_url, &auth_path, &addon_id)
+    .await
+    .ok()?;
+  (info.commit_sha != cached_sha).then_some(info.commit_sha)
+}
+
+/// Fetches the registry's latest version for an addon without downloading it.
+/// Used by `anesis outdated`/`update` to compare against the locked version.
+pub async fn fetch_latest_version(ctx: &AppContext, addon_id: &str) -> Result<String> {
+  Ok(get_addon_url(ctx, addon_id).await?.version)
 }
 
 pub fn read_cached_manifest(addons_dir: &Path, addon_id: &str) -> Result<AddonManifest> {

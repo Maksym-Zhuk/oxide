@@ -11,7 +11,18 @@ pub fn execute_delete(step: &DeleteStep, project_root: &Path) -> Result<Vec<Roll
   let mut rollbacks = Vec::new();
 
   for path in paths {
-    if !path.is_file() {
+    if path.is_dir() {
+      eprintln!(
+        "Warning: skipping '{}': deleting directories is not supported",
+        path.display()
+      );
+      continue;
+    }
+    if !path.exists() {
+      eprintln!(
+        "Warning: delete target '{}' does not exist; skipping",
+        path.display()
+      );
       continue;
     }
     let original = std::fs::read(&path)?;

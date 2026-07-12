@@ -14,7 +14,6 @@ use reqwest::Client;
 fn make_paths(tmp: &TempDir) -> AnesisPaths {
   AnesisPaths {
     home: tmp.path().to_path_buf(),
-    config: tmp.path().join("config.json"),
     version_check: tmp.path().join("version_check.json"),
     cache: tmp.path().join("cache"),
     templates: tmp.path().join("cache/templates"),

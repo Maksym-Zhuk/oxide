@@ -122,7 +122,9 @@ fn traverse_yaml(mut v: &serde_yaml::Value, key_path: &str, expected: Option<&st
     None => true,
     Some(expected) => match v {
       serde_yaml::Value::String(s) => s == expected,
-      other => format!("{other:?}") == expected,
+      serde_yaml::Value::Bool(b) => b.to_string() == expected,
+      serde_yaml::Value::Number(n) => n.to_string() == expected,
+      _ => false,
     },
   }
 }

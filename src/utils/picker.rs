@@ -1,0 +1,270 @@
+use std::io::{Write, stderr};
+
+use anyhow::{Context, Result};
+use colored::Colorize;
+use crossterm::{
+  cursor::{Hide, MoveTo, Show},
+  event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, read},
+  execute, queue,
+  terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode, size},
+};
+
+use crate::utils::ui::truncate;
+
+/// What a picked entry is, used both for the `[tag]` shown in `search` and to
+/// colour it, across the three registry kinds.
+#[derive(Clone, Copy, PartialEq)]
+pub enum ItemKind {
+  Template,
+  Addon,
+  Stack,
+}
+
+impl ItemKind {
+  fn tag(self) -> &'static str {
+    match self {
+      ItemKind::Template => "template",
+      ItemKind::Addon => "addon",
+      ItemKind::Stack => "stack",
+    }
+  }
+}
+
+/// One row in the interactive picker. `meta` is the raw ` · a · b` suffix drawn
+/// after the name; `haystack` is the lowercased text the filter matches against.
+pub struct PickItem {
+  pub kind: ItemKind,
+  /// Value returned to the caller (template name / addon id).
+  pub id: String,
+  pub name: String,
+  pub meta: String,
+  pub description: String,
+  pub haystack: String,
+}
+
+/// Query split into tokens on any non-alphanumeric char (empties dropped).
+fn tokenize(query: &str) -> Vec<&str> {
+  query
+    .split(|c: char| !c.is_alphanumeric())
+    .filter(|tok| !tok.is_empty())
+    .collect()
+}
+
+/// Smart match: every query token must appear as a substring somewhere in the
+/// entry. So `react-ts` (tokens `react`, `ts`) matches `react-vite-ts`.
+fn smart_match(haystack: &str, tokens: &[&str]) -> bool {
+  tokens.iter().all(|tok| haystack.contains(tok))
+}
+
+/// Relevance score (higher = better) so exact/name matches sort to the top.
+/// Ranks by how the query hits the *name*, since that's what a user types.
+fn match_score(name: &str, query: &str, tokens: &[&str]) -> i32 {
+  let mut score = 0;
+  if name == query {
+    score += 1000;
+  } else if name.starts_with(query) {
+    score += 500;
+  } else if name.contains(query) {
+    score += 200;
+  }
+  score += tokens.iter().filter(|tok| name.contains(*tok)).count() as i32 * 20;
+  score
+}
+
+/// Runs the interactive picker over `items`. `title` heads the list; `show_kind`
+/// draws a `[template]`/`[addon]` tag before each name (on for mixed `search`,
+/// off for the template-only `new` flow). `initial_filter` pre-seeds the query.
+///
+/// Returns the chosen item's index, or `None` if the user cancelled (esc/ctrl-c).
+/// Renders to stderr with a full clear+redraw each frame so scrolling never
+/// garbles — inquire can't do the two-line-per-item layout without corrupting it.
+pub fn pick(
+  items: &[PickItem],
+  title: &str,
+  show_kind: bool,
+  initial_filter: &str,
+) -> Result<Option<usize>> {
+  enable_raw_mode().context("Failed to enter raw mode")?;
+  let mut out = stderr();
+  let _ = execute!(out, Hide);
+  let result = picker_loop(&mut out, items, title, show_kind, initial_filter);
+  let _ = execute!(out, Show, MoveTo(0, 0), Clear(ClearType::All));
+  let _ = disable_raw_mode();
+  result
+}
+
+/// Async wrapper around [`pick`]: moves the (blocking) event loop off the
+/// worker thread and hands back the chosen entry's `(kind, id, name)`, or
+/// `None` when cancelled. Every command that shows a picker goes through this.
+pub async fn pick_one(
+  items: Vec<PickItem>,
+  title: impl Into<String>,
+  show_kind: bool,
+  seed: String,
+) -> Result<Option<(ItemKind, String, String)>> {
+  let title = title.into();
+  tokio::task::spawn_blocking(move || {
+    pick(&items, &title, show_kind, &seed)
+      .map(|sel| sel.map(|i| (items[i].kind, items[i].id.clone(), items[i].name.clone())))
+  })
+  .await
+  .context("Picker task failed")?
+}
+
+fn picker_loop(
+  out: &mut impl Write,
+  items: &[PickItem],
+  title: &str,
+  show_kind: bool,
+  initial_filter: &str,
+) -> Result<Option<usize>> {
+  let mut filter = initial_filter.to_string();
+  let mut selected = 0usize;
+
+  loop {
+    let (cols, rows) = size().unwrap_or((80, 24));
+    let width = cols as usize;
+
+    // Smart filter, then rank so the closest name matches sit on top.
+    let needle = filter.to_lowercase();
+    let tokens = tokenize(&needle);
+    let mut matches: Vec<usize> = items
+      .iter()
+      .enumerate()
+      .filter(|(_, it)| smart_match(&it.haystack, &tokens))
+      .map(|(i, _)| i)
+      .collect();
+    // Stable sort keeps input order (e.g. stars) within equal scores.
+    matches.sort_by_key(|&i| -match_score(&items[i].name.to_lowercase(), &needle, &tokens));
+    selected = selected.min(matches.len().saturating_sub(1));
+
+    // 3 rows per item (header, body, blank); 2 header rows + 1 footer reserved.
+    let per_page = ((rows as usize).saturating_sub(4) / 3).max(1);
+    let offset = if selected >= per_page {
+      selected - per_page + 1
+    } else {
+      0
+    };
+
+    let mut lines: Vec<String> = Vec::with_capacity(per_page * 3 + 3);
+    lines.push(title.bold().to_string());
+    lines.push(format!("{} {}", "›".dimmed(), filter));
+    lines.push(String::new());
+    for (row_idx, &item_idx) in matches.iter().enumerate().skip(offset).take(per_page) {
+      let it = &items[item_idx];
+      let tag = if show_kind {
+        format!("[{}] ", it.kind.tag())
+      } else {
+        String::new()
+      };
+      let body = truncate(
+        if it.description.is_empty() {
+          &it.name
+        } else {
+          &it.description
+        },
+        width.saturating_sub(4),
+      );
+      if row_idx == selected {
+        lines.push(format!(
+          "{} {}{}{}",
+          "❯".cyan().bold(),
+          tag.cyan(),
+          it.name.clone().cyan().bold(),
+          it.meta.cyan()
+        ));
+        lines.push(format!("    {}", body.cyan()));
+      } else {
+        let tag = match it.kind {
+          ItemKind::Template => tag.green(),
+          ItemKind::Addon => tag.magenta(),
+          ItemKind::Stack => tag.blue(),
+        };
+        lines.push(format!(
+          "  {}{}{}",
+          tag,
+          it.name.clone().bold(),
+          it.meta.dimmed()
+        ));
+        lines.push(format!("    {}", body.dimmed()));
+      }
+      lines.push(String::new());
+    }
+    if matches.is_empty() {
+      lines.push("  no matches".dimmed().to_string());
+    }
+    lines.push(
+      "↑↓ move · type to filter · enter select · esc cancel"
+        .dimmed()
+        .to_string(),
+    );
+
+    queue!(out, Clear(ClearType::All))?;
+    for (row, line) in lines.iter().enumerate() {
+      if row as u16 >= rows {
+        break;
+      }
+      queue!(out, MoveTo(0, row as u16))?;
+      out.write_all(line.as_bytes())?;
+    }
+    out.flush()?;
+
+    let Event::Key(KeyEvent {
+      code,
+      modifiers,
+      kind: KeyEventKind::Press,
+      ..
+    }) = read()?
+    else {
+      continue;
+    };
+
+    match code {
+      KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => return Ok(None),
+      KeyCode::Esc => return Ok(None),
+      KeyCode::Enter => match matches.get(selected) {
+        Some(&i) => return Ok(Some(i)),
+        None => continue,
+      },
+      KeyCode::Up => selected = selected.saturating_sub(1),
+      KeyCode::Down => {
+        if selected + 1 < matches.len() {
+          selected += 1;
+        }
+      }
+      KeyCode::Backspace => {
+        filter.pop();
+        selected = 0;
+      }
+      KeyCode::Char(c) => {
+        filter.push(c);
+        selected = 0;
+      }
+      _ => {}
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{match_score, smart_match, tokenize};
+
+  #[test]
+  fn tokens_match_across_separators() {
+    // "react-ts" -> tokens react, ts -> both present, order-independent.
+    assert!(smart_match("react-vite-ts starter", &tokenize("react-ts")));
+    assert!(smart_match("react-vite-ts", &tokenize("ts react")));
+    assert!(smart_match("anything", &tokenize(""))); // empty query matches all
+    assert!(!smart_match("react-vite-ts", &tokenize("vue"))); // missing token fails
+  }
+
+  #[test]
+  fn exact_and_prefix_rank_above_fuzzy() {
+    let q = "react";
+    let toks = tokenize(q);
+    let exact = match_score("react", q, &toks);
+    let prefix = match_score("react-vite-ts", q, &toks);
+    let fuzzy = match_score("preact-remix", q, &toks);
+    assert!(exact > prefix && prefix > fuzzy);
+  }
+}

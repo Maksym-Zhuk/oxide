@@ -18,7 +18,6 @@ use reqwest::Client;
 fn make_ctx_without_auth(tmp: &TempDir) -> AppContext {
   let paths = AnesisPaths {
     home: tmp.path().to_path_buf(),
-    config: tmp.path().join("config"),
     version_check: tmp.path().join("version_check.json"),
     cache: tmp.path().join("cache"),
     templates: tmp.path().join("cache/templates"),

@@ -1,6 +1,6 @@
 [package]
 name = "anesis"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 authors = ["Maksym <maksymzhuk759@gmail.com>"]
 description = "CLI for scaffolding projects from remote templates and extending them with project addons"
@@ -57,6 +57,7 @@ which = "7"
 ctrlc = "3.5.2"
 chrono = "0.4.43"
 comfy-table = "7"
+crossterm = "0.29"
 axum = "0.8.8"
 open = "5.3.3"
 url = "2.5.8"
@@ -65,6 +66,7 @@ dialoguer = "0.12.0"
 log = "0.4.29"
 env_logger = "0.11.10"
 dotenvy = "0.15.7"
+base64 = "0.22"
 
 [dev-dependencies]
 assert_cmd = "2.0"

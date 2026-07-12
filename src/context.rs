@@ -19,10 +19,12 @@ pub struct AppContext {
 
 impl AppContext {
   pub fn new(paths: AnesisPaths, client: Client, cleanup_state: CleanupState) -> Self {
-    // let backend_url = "http://localhost:4000".to_string();
-    // let frontend_url = "http://localhost:3000".to_string();
-    let backend_url = "https://anesis-server.onrender.com".to_string();
-    let frontend_url = "https://anesis-dev.vercel.app".to_string();
+    // Default to production; override with env vars for local development
+    // (e.g. ANESIS_BACKEND_URL=http://localhost:4000).
+    let backend_url = std::env::var("ANESIS_BACKEND_URL")
+      .unwrap_or_else(|_| "https://anesis-server.onrender.com".to_string());
+    let frontend_url = std::env::var("ANESIS_FRONTEND_URL")
+      .unwrap_or_else(|_| "https://anesis-dev.vercel.app".to_string());
     Self {
       paths,
       client,

@@ -126,6 +126,8 @@ pub enum Step {
   Delete(DeleteStep),
   Rename(RenameStep),
   Move(MoveStep),
+  Packages(PackagesStep),
+  Run(RunStep),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -184,6 +186,21 @@ pub struct RenameStep {
 pub struct MoveStep {
   pub from: String,
   pub to: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PackagesStep {
+  #[serde(default)]
+  pub dependencies: Vec<String>,
+  #[serde(default)]
+  pub dev_dependencies: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RunStep {
+  pub command: String,
+  #[serde(default)]
+  pub description: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

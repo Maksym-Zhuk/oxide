@@ -34,6 +34,8 @@ fn anesis_template_serializes_with_camel_case_keys() {
       display_name: "Next.js App".to_string(),
       description: "Next.js application template".to_string(),
     },
+    inputs: vec![],
+    exclude: vec![],
   };
 
   let json = serde_json::to_string(&template).unwrap();
@@ -74,6 +76,8 @@ fn anesis_template_json_round_trip_preserves_all_fields() {
       display_name: "SvelteKit".to_string(),
       description: "SvelteKit fullstack template".to_string(),
     },
+    inputs: vec![],
+    exclude: vec![],
   };
 
   let json = serde_json::to_string(&original).unwrap();
