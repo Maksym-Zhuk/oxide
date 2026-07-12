@@ -394,11 +394,12 @@ fn rename_rollback_reverses() {
     to: "new.txt".into(),
   };
   let rollbacks = execute_rename(&step, dir.path(), &tera::Context::new()).unwrap();
+  let canon_dir = dir.path().canonicalize().unwrap();
 
   match &rollbacks[0] {
     Rollback::RenameFile { from, to } => {
-      assert_eq!(from, &dir.path().join("new.txt"));
-      assert_eq!(to, &dir.path().join("old.txt"));
+      assert_eq!(from, &canon_dir.join("new.txt"));
+      assert_eq!(to, &canon_dir.join("old.txt"));
     }
     _ => panic!("expected RenameFile rollback"),
   }
