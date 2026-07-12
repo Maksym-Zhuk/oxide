@@ -24,6 +24,7 @@ fn make_ctx_without_auth(tmp: &TempDir) -> AppContext {
     auth: tmp.path().join("auth.json"), // file does not exist → not logged in
     addons: tmp.path().join("cache/addons"),
     addons_index: tmp.path().join("cache/addons/anesis-addons.json"),
+    stacks: tmp.path().join("cache/stacks"),
   };
   let client = Client::builder()
     .timeout(Duration::from_secs(5))

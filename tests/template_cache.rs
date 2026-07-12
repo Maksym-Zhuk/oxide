@@ -20,6 +20,7 @@ fn make_test_ctx(templates_dir: &std::path::Path) -> AppContext {
       .join("cache")
       .join("addons")
       .join("anesis-addons.json"),
+    stacks: templates_dir.join("cache").join("stacks"),
   };
   AppContext {
     paths,

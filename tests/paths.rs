@@ -73,6 +73,7 @@ fn ensure_directories_creates_cache_dir() {
       .join("cache")
       .join("addons")
       .join("anesis-addons.json"),
+    stacks: dir.path().join("cache").join("stacks"),
   };
 
   paths.ensure_directories().unwrap();
@@ -95,6 +96,7 @@ fn ensure_directories_creates_templates_dir() {
       .join("cache")
       .join("addons")
       .join("anesis-addons.json"),
+    stacks: dir.path().join("cache").join("stacks"),
   };
 
   paths.ensure_directories().unwrap();
@@ -117,6 +119,7 @@ fn ensure_directories_creates_addons_dir() {
       .join("cache")
       .join("addons")
       .join("anesis-addons.json"),
+    stacks: dir.path().join("cache").join("stacks"),
   };
 
   paths.ensure_directories().unwrap();
@@ -139,6 +142,7 @@ fn ensure_directories_is_idempotent() {
       .join("cache")
       .join("addons")
       .join("anesis-addons.json"),
+    stacks: dir.path().join("cache").join("stacks"),
   };
 
   // Running twice should not fail

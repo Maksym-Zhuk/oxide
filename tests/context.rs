@@ -20,6 +20,7 @@ fn make_paths(tmp: &TempDir) -> AnesisPaths {
     auth: tmp.path().join("auth.json"),
     addons: tmp.path().join("cache/addons"),
     addons_index: tmp.path().join("cache/addons/anesis-addons.json"),
+    stacks: tmp.path().join("cache/stacks"),
   }
 }
 
