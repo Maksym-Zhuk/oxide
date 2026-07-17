@@ -1,4 +1,5 @@
 use std::{
+  collections::HashMap,
   path::PathBuf,
   sync::{Arc, Mutex},
 };
@@ -7,13 +8,21 @@ use anesis::{
   context::AppContext,
   paths::AnesisPaths,
   templates::{
-    TemplateFile,
+    ExcludeBlock, TemplateFile,
     generator::{
-      extract_dir_contents, to_camel_case, to_kebab_case, to_pascal_case, to_snake_case,
+      eval_when, excluded_paths, extract_dir_contents, to_camel_case, to_kebab_case,
+      to_pascal_case, to_snake_case,
     },
   },
 };
 use tera::{Context, Tera};
+
+fn inputs(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+  pairs
+    .iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect()
+}
 
 fn make_context(project_name: &str) -> Context {
   let mut ctx = Context::new();
@@ -28,7 +37,6 @@ fn make_app_context() -> AppContext {
   AppContext::new(paths, reqwest::Client::new(), Arc::new(Mutex::new(None)))
 }
 
-// ── case helpers ──────────────────────────────────────────────────────────────
 
 #[test]
 fn kebab_case_replaces_underscores_and_spaces() {
@@ -44,7 +52,6 @@ fn snake_case_replaces_hyphens_and_spaces() {
   assert_eq!(to_snake_case("Hello-World"), "hello_world");
 }
 
-// ── extract_dir_contents ──────────────────────────────────────────────────────
 
 #[test]
 fn renders_tera_file_and_strips_extension() {
@@ -137,7 +144,6 @@ fn creates_nested_output_directories() {
   assert!(dir.path().join("src/components/Button.tsx").exists());
 }
 
-// ── to_pascal_case ────────────────────────────────────────────────────────────
 
 #[test]
 fn pascal_case_from_kebab() {
@@ -169,7 +175,6 @@ fn pascal_case_with_spaces() {
   assert_eq!(to_pascal_case("my project name"), "MyProjectName");
 }
 
-// ── to_camel_case ─────────────────────────────────────────────────────────────
 
 #[test]
 fn camel_case_from_kebab() {
@@ -197,7 +202,6 @@ fn camel_case_with_spaces() {
   assert_eq!(to_camel_case("my project"), "myProject");
 }
 
-// ── path traversal ────────────────────────────────────────────────────────────
 
 #[test]
 fn path_traversal_blocked_by_extract_dir_contents() {
@@ -242,7 +246,6 @@ fn path_traversal_with_tera_file_blocked() {
   );
 }
 
-// ── extract_dir_contents: Tera variable substitution ─────────────────────────
 
 #[test]
 fn renders_all_three_case_variables() {
@@ -296,4 +299,38 @@ fn multiple_tera_files_rendered_independently() {
   let b = std::fs::read_to_string(dir.path().join("b.txt")).unwrap();
   assert_eq!(a, "A: MyApp");
   assert_eq!(b, "B: myapp");
+}
+
+
+#[test]
+fn eval_when_handles_negation_and_missing() {
+  let on = inputs(&[("use_docker", "true")]);
+  let off = inputs(&[("use_docker", "false")]);
+  assert!(eval_when("use_docker", &on));
+  assert!(!eval_when("use_docker", &off));
+  assert!(eval_when("!use_docker", &off));
+  assert!(!eval_when("!use_docker", &on));
+  assert!(!eval_when("use_docker", &HashMap::new()));
+  assert!(eval_when("!use_docker", &HashMap::new()));
+}
+
+#[test]
+fn excluded_paths_collects_only_active_blocks() {
+  let blocks = vec![
+    ExcludeBlock {
+      when: "!use_docker".into(),
+      paths: vec!["Dockerfile".into(), "docker-compose.yml".into()],
+    },
+    ExcludeBlock {
+      when: "use_swagger".into(),
+      paths: vec!["swagger.ts".into()],
+    },
+  ];
+  let set = excluded_paths(
+    &blocks,
+    &inputs(&[("use_docker", "false"), ("use_swagger", "false")]),
+  );
+  assert!(set.contains(&PathBuf::from("Dockerfile")));
+  assert!(set.contains(&PathBuf::from("docker-compose.yml")));
+  assert!(!set.contains(&PathBuf::from("swagger.ts")));
 }

@@ -37,8 +37,6 @@ pub fn extract_template(
   Ok(())
 }
 
-/// Parses the `anesis.template.json` marker out of a loaded template's files, so
-/// `new` can read its `inputs`/`exclude` before rendering.
 pub fn parse_template_manifest(files: &[TemplateFile]) -> Option<AnesisTemplate> {
   files
     .iter()
@@ -51,10 +49,6 @@ pub fn parse_template_manifest(files: &[TemplateFile]) -> Option<AnesisTemplate>
     .and_then(|f| serde_json::from_slice(&f.contents).ok())
 }
 
-/// Evaluates an `exclude` condition: `<input>` is true when that boolean input is
-/// `"true"`, and a leading `!` negates it. Anything else is false.
-// ponytail: single boolean var with optional `!` — matches the plan's `!use_docker`
-// form. Grow into a real expression eval only if templates need `and`/`or`.
 pub fn eval_when(expr: &str, inputs: &HashMap<String, String>) -> bool {
   let expr = expr.trim();
   let (negate, name) = match expr.strip_prefix('!') {
@@ -65,7 +59,6 @@ pub fn eval_when(expr: &str, inputs: &HashMap<String, String>) -> bool {
   truthy ^ negate
 }
 
-/// The set of template-relative output paths to omit, given the collected inputs.
 pub fn excluded_paths(
   blocks: &[ExcludeBlock],
   inputs: &HashMap<String, String>,
@@ -89,8 +82,6 @@ fn insert_inputs(context: &mut Context, inputs: &HashMap<String, String>) {
   }
 }
 
-/// The template-relative path a file would be written to (`.tera` stripped), or
-/// `None` for the manifest marker. Used to match against `exclude` paths.
 fn relative_output(file: &TemplateFile) -> Option<PathBuf> {
   let name = file.path.file_name()?.to_string_lossy().to_string();
   if name == "anesis.template.json" {
@@ -106,53 +97,6 @@ fn is_excluded(file: &TemplateFile, excluded: &HashSet<PathBuf>) -> bool {
   relative_output(file)
     .map(|p| excluded.contains(&p))
     .unwrap_or(false)
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use crate::templates::ExcludeBlock;
-
-  fn inputs(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-    pairs
-      .iter()
-      .map(|(k, v)| (k.to_string(), v.to_string()))
-      .collect()
-  }
-
-  #[test]
-  fn eval_when_handles_negation_and_missing() {
-    let on = inputs(&[("use_docker", "true")]);
-    let off = inputs(&[("use_docker", "false")]);
-    assert!(eval_when("use_docker", &on));
-    assert!(!eval_when("use_docker", &off));
-    assert!(eval_when("!use_docker", &off));
-    assert!(!eval_when("!use_docker", &on));
-    // Missing input is falsy.
-    assert!(!eval_when("use_docker", &HashMap::new()));
-    assert!(eval_when("!use_docker", &HashMap::new()));
-  }
-
-  #[test]
-  fn excluded_paths_collects_only_active_blocks() {
-    let blocks = vec![
-      ExcludeBlock {
-        when: "!use_docker".into(),
-        paths: vec!["Dockerfile".into(), "docker-compose.yml".into()],
-      },
-      ExcludeBlock {
-        when: "use_swagger".into(),
-        paths: vec!["swagger.ts".into()],
-      },
-    ];
-    let set = excluded_paths(
-      &blocks,
-      &inputs(&[("use_docker", "false"), ("use_swagger", "false")]),
-    );
-    assert!(set.contains(&PathBuf::from("Dockerfile")));
-    assert!(set.contains(&PathBuf::from("docker-compose.yml")));
-    assert!(!set.contains(&PathBuf::from("swagger.ts")));
-  }
 }
 
 pub fn to_kebab_case(s: &str) -> String {
@@ -228,9 +172,6 @@ fn safe_template_path(base: &Path, relative: &Path) -> Result<PathBuf> {
   Ok(out)
 }
 
-/// Computes the on-disk path a template file would be written to, mirroring the
-/// naming rules in `extract_dir_contents` (strip `.tera`; the
-/// `anesis.template.json` marker is never written verbatim, so it maps to `None`).
 fn resolved_output_path(file: &TemplateFile, base_path: &Path) -> Result<Option<PathBuf>> {
   let file_name = file
     .path
@@ -250,8 +191,6 @@ fn resolved_output_path(file: &TemplateFile, base_path: &Path) -> Result<Option<
   }
 }
 
-/// Returns the existing files under `project_name` that generating `files` would
-/// overwrite, so `new` can warn before clobbering an occupied directory.
 pub fn overwritten_paths(
   files: &[TemplateFile],
   project_name: &str,

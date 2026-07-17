@@ -45,8 +45,6 @@ async fn run() -> Result<()> {
   let cli = cli::parse();
   let ctx = config::build_app_context()?;
 
-  // --json output must be clean, machine-parseable stdout, so the trailing
-  // "new version available" notice is suppressed whenever json is requested.
   let json_mode = matches!(
     &cli.command,
     Commands::Account { json: true }
@@ -90,7 +88,7 @@ async fn run() -> Result<()> {
       validate_project_name(&name)?;
       let inputs = parse_inputs(&input)?;
       if let Some(stack_ref) = stack {
-        let stack = anesis::stacks::resolve_stack(&ctx, &stack_ref).await?;
+        let stack = anesis::stacks::cache::resolve_stack(&ctx, &stack_ref).await?;
         apply_stack(&ctx, &name, &stack, yes, &inputs).await?;
       } else {
         let template_name = match template_name {
@@ -255,7 +253,7 @@ async fn run() -> Result<()> {
     },
     Commands::Stack { command } => match command {
       StackCommands::Install { stack_id } => {
-        anesis::stacks::install_stack(&ctx, &stack_id).await?;
+        anesis::stacks::cache::install_stack(&ctx, &stack_id).await?;
         println!("✅ Stack '{stack_id}' installed.");
         println!(
           "   Scaffold it:  {}",
@@ -263,13 +261,13 @@ async fn run() -> Result<()> {
         );
       }
       StackCommands::List { json } => {
-        anesis::stacks::print_installed_stacks(&ctx, json)?;
+        anesis::stacks::info::print_installed_stacks(&ctx, json)?;
       }
       StackCommands::Info { stack_id, json } => {
-        anesis::stacks::stack_info(&ctx, &stack_id, json).await?;
+        anesis::stacks::info::stack_info(&ctx, &stack_id, json).await?;
       }
       StackCommands::Remove { stack_id } => {
-        anesis::stacks::remove_cached_stack(&ctx, &stack_id)?;
+        anesis::stacks::cache::remove_cached_stack(&ctx, &stack_id)?;
       }
       StackCommands::Publish {
         stack_url,
@@ -278,7 +276,7 @@ async fn run() -> Result<()> {
         org_id,
       } => {
         is_valid_github_repo_url(&stack_url)?;
-        anesis::stacks::publish_stack(&ctx, &stack_url, false, visibility, credential_id, org_id)
+        anesis::stacks::publish::publish_stack(&ctx, &stack_url, false, visibility, credential_id, org_id)
           .await?;
       }
       StackCommands::Update {
@@ -288,7 +286,7 @@ async fn run() -> Result<()> {
         org_id,
       } => {
         is_valid_github_repo_url(&stack_url)?;
-        anesis::stacks::publish_stack(&ctx, &stack_url, true, visibility, credential_id, org_id)
+        anesis::stacks::publish::publish_stack(&ctx, &stack_url, true, visibility, credential_id, org_id)
           .await?;
       }
     },
@@ -319,7 +317,6 @@ async fn run() -> Result<()> {
           )
           .await?;
         }
-        // No command given: show what this addon can run instead of erroring.
         None => {
           addons::runner::list_addon_commands(
             &ctx,
@@ -357,7 +354,7 @@ async fn run() -> Result<()> {
     Commands::Search { query, json } => {
       let mut items: Vec<PickItem> = template_pick_items(&ctx, false).await?;
       items.extend(addon_pick_items(&ctx, false).await?);
-      items.extend(anesis::stacks::stack_pick_items(&ctx).await.unwrap_or_default());
+      items.extend(anesis::stacks::registry::stack_pick_items(&ctx).await.unwrap_or_default());
 
       if json {
         let needle = query.unwrap_or_default().to_lowercase();
@@ -501,7 +498,7 @@ fn parse_inputs(pairs: &[String]) -> Result<std::collections::HashMap<String, St
 async fn apply_stack(
   ctx: &AppContext,
   project_name: &str,
-  stack: &anesis::stacks::StackManifest,
+  stack: &anesis::stacks::manifest::StackManifest,
   yes: bool,
   inputs: &std::collections::HashMap<String, String>,
 ) -> Result<()> {
@@ -553,8 +550,6 @@ async fn create_new_project(
 ) -> Result<()> {
   let files = get_files(ctx, template_name).await?;
 
-  // Collect the template's declared inputs (if any), then decide which files the
-  // `exclude` conditions drop, before touching disk.
   let mut inputs = std::collections::HashMap::new();
   let mut excluded = std::collections::HashSet::new();
   if let Some(manifest) = anesis::templates::generator::parse_template_manifest(&files) {

@@ -34,8 +34,6 @@ pub async fn run_local_auth_server(expected_state: String, frontend_url: &str) -
     .route("/callback", get(callback))
     .with_state(state);
 
-  // Bind with SO_REUSEADDR so a fresh login can rebind the port immediately,
-  // even while a connection from a previous login lingers in TIME_WAIT.
   let socket = tokio::net::TcpSocket::new_v4()?;
   socket.set_reuseaddr(true)?;
   socket.bind("127.0.0.1:8080".parse()?)?;

@@ -6,3 +6,9 @@ CLAUDE.md
 src/completions_example.rs
 skills-lock.json
 graphify-out/
+AGENTS.md
+.cursor
+architecture.md
+current_sprint.md
+edgecases.md
+techstack.md

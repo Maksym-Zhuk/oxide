@@ -28,7 +28,6 @@ fn returns_error_when_not_logged_in() {
 
 #[test]
 fn logout_is_idempotent_failure() {
-  // Calling logout twice should fail the second time.
   let dir = assert_fs::TempDir::new().unwrap();
   let auth_file = dir.child("auth.json");
   auth_file.write_str("{}").unwrap();

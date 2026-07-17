@@ -12,9 +12,6 @@ struct ExpClaim {
 }
 
 pub fn get_auth_user(auth_path: &Path) -> Result<User> {
-  // A PAT in the environment wins over the stored browser session — this is how
-  // CI and AI agents authenticate without an interactive login. PATs aren't
-  // JWTs, so the local expiry check is skipped (the server validates them).
   if let Ok(token) = std::env::var("ANESIS_TOKEN") {
     let token = token.trim();
     if !token.is_empty() {
@@ -35,10 +32,6 @@ pub fn get_auth_user(auth_path: &Path) -> Result<User> {
   Ok(user)
 }
 
-/// Best-effort local check of the JWT `exp` claim so authenticated commands
-/// fail fast with a clear "re-login" message instead of a doomed request.
-/// Returns false when the token can't be parsed — the server stays the source
-/// of truth for signature/token_version validation.
 fn is_token_expired(token: &str) -> bool {
   let Some(payload_b64) = token.split('.').nth(1) else {
     return false;
@@ -52,22 +45,6 @@ fn is_token_expired(token: &str) -> bool {
   }
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  fn token_with_exp(exp: i64) -> String {
-    let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"HS256"}"#);
-    let payload = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));
-    format!("{header}.{payload}.sig")
-  }
-
-  #[test]
-  fn detects_expired_and_valid_tokens() {
-    let now = chrono::Utc::now().timestamp();
-    assert!(is_token_expired(&token_with_exp(now - 60)));
-    assert!(!is_token_expired(&token_with_exp(now + 3600)));
-    // Unparseable tokens defer to the server rather than blocking locally.
-    assert!(!is_token_expired("not-a-jwt"));
-  }
+pub fn is_token_expired_for_tests(token: &str) -> bool {
+  is_token_expired(token)
 }

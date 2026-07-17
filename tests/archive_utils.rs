@@ -4,7 +4,6 @@ use std::path::Path;
 
 use common::strip_archive_path_for_tests;
 
-// ── Root stripping ────────────────────────────────────────────────────────────
 
 #[test]
 fn strips_single_root_component() {
@@ -22,7 +21,6 @@ fn strips_root_for_file_directly_in_archive_root() {
 
 #[test]
 fn returns_none_for_root_directory_entry() {
-  // An entry whose only component is the archive root itself (empty after strip).
   let raw = Path::new("root-dir/");
   let result = strip_archive_path_for_tests(raw, None);
   assert!(
@@ -41,7 +39,6 @@ fn returns_none_for_bare_root_component() {
   );
 }
 
-// ── Subdir filtering ──────────────────────────────────────────────────────────
 
 #[test]
 fn strips_subdir_prefix_from_matching_entry() {
@@ -62,7 +59,6 @@ fn returns_none_for_entry_outside_subdir() {
 
 #[test]
 fn returns_none_for_subdir_directory_entry_itself() {
-  // After stripping root + subdir, the remainder is empty.
   let raw = Path::new("root/templates/");
   let result = strip_archive_path_for_tests(raw, Some("templates"));
   assert!(
@@ -73,7 +69,6 @@ fn returns_none_for_subdir_directory_entry_itself() {
 
 #[test]
 fn returns_none_when_subdir_matches_partially() {
-  // "templates-extra" should NOT match subdir "templates".
   let raw = Path::new("root/templates-extra/file.ts");
   let result = strip_archive_path_for_tests(raw, Some("templates"));
   assert!(

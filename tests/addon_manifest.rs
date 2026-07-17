@@ -1,6 +1,5 @@
 use anesis::addons::manifest::*;
 
-// ── Minimal manifest ──────────────────────────────────────────────────────────
 
 #[test]
 fn minimal_manifest_deserializes() {
@@ -42,7 +41,6 @@ requires:
   assert_eq!(manifest.requires, ["node", "npm"]);
 }
 
-// ── InputDef ─────────────────────────────────────────────────────────────────
 
 #[test]
 fn input_type_text_deserializes() {
@@ -86,7 +84,6 @@ options:
   assert_eq!(input.options, ["npm", "yarn", "pnpm"]);
 }
 
-// ── DetectBlock & DetectRule ──────────────────────────────────────────────────
 
 #[test]
 fn detect_block_file_exists_rule() {
@@ -166,7 +163,6 @@ rules:
   assert!(matches!(block.match_mode, MatchMode::Any));
 }
 
-// ── Step variants ─────────────────────────────────────────────────────────────
 
 #[test]
 fn copy_step_deserializes() {
@@ -306,7 +302,6 @@ to: src/new-dir
   }
 }
 
-// ── IfNotFound default ────────────────────────────────────────────────────────
 
 #[test]
 fn if_not_found_defaults_to_warn_and_ask() {
@@ -339,7 +334,6 @@ if_not_found: error
   }
 }
 
-// ── Variant ───────────────────────────────────────────────────────────────────
 
 #[test]
 fn variant_with_condition_and_commands() {
@@ -373,7 +367,6 @@ commands:
   assert!(variant.when.is_none());
 }
 
-// ── Full manifest round-trip ──────────────────────────────────────────────────
 
 #[test]
 fn full_manifest_yaml_round_trip() {

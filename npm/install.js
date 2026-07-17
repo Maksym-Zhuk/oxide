@@ -86,7 +86,6 @@ function extractTarGz(buf, destPath) {
 		const size = parseInt(sizeStr, 8) || 0;
 		const typeFlag = header[156];
 		offset += 512;
-		// Regular file (type '0' = 0x30, or NUL for old-style)
 		if (typeFlag === 0x30 || typeFlag === 0) {
 			if (path.basename(name) === "anesis") {
 				fs.writeFileSync(destPath, inflated.slice(offset, offset + size), {
@@ -102,7 +101,6 @@ function extractTarGz(buf, destPath) {
 }
 
 function extractZip(buf, destPath) {
-	// Locate End of Central Directory (signature 0x06054b50)
 	let eocdOffset = -1;
 	for (let i = buf.length - 22; i >= 0; i--) {
 		if (buf.readUInt32LE(i) === 0x06054b50) {
@@ -175,6 +173,5 @@ function installCompletions(binaryPath) {
 	try {
 		spawnSync(binaryPath, ["completions", shell], { stdio: "inherit" });
 	} catch (_) {
-		// completions are optional — never fail the install
 	}
 }

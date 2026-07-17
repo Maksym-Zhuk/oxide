@@ -2,7 +2,6 @@ use std::fmt;
 
 use anesis::utils::errors::AnesisError;
 
-// ── AnesisError Display ────────────────────────────────────────────────────────
 
 #[test]
 fn not_logged_in_display() {
@@ -46,7 +45,6 @@ fn network_timeout_display() {
   assert_eq!(err.to_string(), "The request timed out.");
 }
 
-// ── AnesisError in anyhow chain ────────────────────────────────────────────────
 
 #[test]
 fn anesis_error_wrapped_in_anyhow_is_downcastable() {
@@ -67,7 +65,6 @@ fn anesis_error_survives_anyhow_context_chain() {
   );
 }
 
-// ── AnesisError is Debug + Display (both trait bounds required by the codebase) ──
 
 #[test]
 fn anesis_error_implements_debug() {

@@ -1,6 +1,5 @@
 use anesis::paths::AnesisPaths;
 
-// ── AnesisPaths::new ───────────────────────────────────────────────────────────
 
 #[test]
 fn new_returns_ok() {
@@ -56,7 +55,6 @@ fn addons_index_is_under_addons() {
   );
 }
 
-// ── AnesisPaths::ensure_directories ───────────────────────────────────────────
 
 #[test]
 fn ensure_directories_creates_cache_dir() {
@@ -145,7 +143,6 @@ fn ensure_directories_is_idempotent() {
     stacks: dir.path().join("cache").join("stacks"),
   };
 
-  // Running twice should not fail
   paths.ensure_directories().unwrap();
   paths.ensure_directories().unwrap();
 

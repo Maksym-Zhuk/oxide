@@ -14,15 +14,11 @@ pub mod rename;
 pub mod replace;
 pub mod run;
 
-// ponytail: `original` serializes as a JSON byte array in anesis.lock — verbose
-// but correct for any file content. Swap to base64 if lock size ever matters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Rollback {
   DeleteCreatedFile { path: PathBuf },
   RestoreFile { path: PathBuf, original: Vec<u8> },
   RenameFile { from: PathBuf, to: PathBuf },
-  // A `run` step executed a shell command; its effects can't be reversed, so undo
-  // only warns.
   IrreversibleRun { command: String },
 }
 

@@ -18,12 +18,8 @@ pub struct LockEntry {
   pub version: String,
   pub variant: String,
   pub commands_executed: Vec<String>,
-  // Inversions from every applied command, in execution order. `undo` replays them
-  // in reverse. `#[serde(default)]` keeps pre-1.4 locks parseable.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub journal: Vec<Rollback>,
-  // Inputs collected across this addon's commands, so `update` can replay them
-  // non-interactively. `#[serde(default)]` keeps pre-2.3 locks parseable.
   #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   pub inputs: HashMap<String, String>,
 }

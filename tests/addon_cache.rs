@@ -22,7 +22,6 @@ fn make_manifest(id: &str) -> AddonManifest {
   }
 }
 
-// ── update_addons_cache ───────────────────────────────────────────────────────
 
 #[test]
 fn update_addons_cache_adds_entry() {
@@ -54,7 +53,6 @@ fn update_addons_cache_replaces_duplicate() {
   assert_eq!(result.version, "2.0.0");
   assert_eq!(result.commit_sha, "sha2");
 
-  // Only one entry after replacement
   let content = std::fs::read_to_string(dir.path().join("anesis-addons.json")).unwrap();
   let cache: anesis::addons::cache::AddonsCache = serde_json::from_str(&content).unwrap();
   assert_eq!(cache.addons.len(), 1);
@@ -71,7 +69,6 @@ fn update_addons_cache_stores_multiple_addons() {
   assert_eq!(cache.addons.len(), 2);
 }
 
-// ── get_cached_addon ──────────────────────────────────────────────────────────
 
 #[test]
 fn get_cached_addon_returns_entry_when_present() {
@@ -99,7 +96,6 @@ fn get_cached_addon_returns_none_when_no_index() {
   assert!(result.is_none());
 }
 
-// ── remove_addon_from_cache ───────────────────────────────────────────────────
 
 #[test]
 fn remove_addon_removes_entry() {
@@ -152,7 +148,6 @@ fn remove_addon_keeps_other_addons() {
   assert!(result.is_some());
 }
 
-// ── is_addon_installed ────────────────────────────────────────────────────────
 
 #[test]
 fn is_addon_installed_true_when_in_cache_and_dir_exists() {
@@ -176,13 +171,11 @@ fn is_addon_installed_false_when_not_in_cache() {
 #[test]
 fn is_addon_installed_false_when_dir_missing() {
   let dir = assert_fs::TempDir::new().unwrap();
-  // Add to cache but don't create the directory
   update_addons_cache(dir.path(), "drizzle", &make_manifest("drizzle"), "abc").unwrap();
 
   assert!(!is_addon_installed(dir.path(), "drizzle").unwrap());
 }
 
-// ── get_installed_addons ──────────────────────────────────────────────────────
 
 #[test]
 fn get_installed_addons_no_index_is_ok() {

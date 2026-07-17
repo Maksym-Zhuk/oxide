@@ -1,6 +1,5 @@
 use anesis::templates::{AnesisTemplate, AnesisTemplateMetadata, AnesisTemplateRepository};
 
-// ── JSON serialization / deserialization ──────────────────────────────────────
 
 #[test]
 fn anesis_template_deserializes_from_json() {
@@ -39,7 +38,6 @@ fn anesis_template_serializes_with_camel_case_keys() {
   };
 
   let json = serde_json::to_string(&template).unwrap();
-  // The rename attributes use camelCase for anesis_version and display_name.
   assert!(
     json.contains("\"anesisVersion\""),
     "should use anesisVersion key"
@@ -94,7 +92,6 @@ fn anesis_template_json_round_trip_preserves_all_fields() {
   assert_eq!(restored.metadata.description, original.metadata.description);
 }
 
-// ── AnesisTemplateRepository ───────────────────────────────────────────────────
 
 #[test]
 fn repository_serializes_and_deserializes() {
@@ -106,7 +103,6 @@ fn repository_serializes_and_deserializes() {
   assert_eq!(back.url, repo.url);
 }
 
-// ── AnesisTemplateMetadata ─────────────────────────────────────────────────────
 
 #[test]
 fn metadata_deserializes_display_name_camel_case() {

@@ -5,7 +5,6 @@ fn cmd() -> Command {
   assert_cmd::cargo::cargo_bin_cmd!("anesis")
 }
 
-// ── Help / top-level ─────────────────────────────────────────────────────────
 
 #[test]
 fn help_flag() {
@@ -18,11 +17,9 @@ fn help_flag() {
 
 #[test]
 fn no_args_shows_help() {
-  // clap prints help and exits with error when no subcommand is given
   cmd().assert().failure();
 }
 
-// ── template subcommand ───────────────────────────────────────────────────────
 
 #[test]
 fn template_help() {
@@ -39,8 +36,6 @@ fn template_help() {
 
 #[test]
 fn template_install_arg_is_optional() {
-  // Omitting the name is allowed — `template install` falls back to the
-  // interactive picker rather than erroring.
   cmd()
     .args(["template", "install", "--help"])
     .assert()
@@ -76,7 +71,6 @@ fn template_unknown_subcommand() {
     .stderr(contains("unrecognized subcommand"));
 }
 
-// ── addon subcommand ──────────────────────────────────────────────────────────
 
 #[test]
 fn addon_help() {
@@ -92,8 +86,6 @@ fn addon_help() {
 
 #[test]
 fn addon_install_arg_is_optional() {
-  // Omitting the id is allowed — `addon install` falls back to the interactive
-  // picker rather than erroring.
   cmd()
     .args(["addon", "install", "--help"])
     .assert()
@@ -120,7 +112,6 @@ fn addon_unknown_subcommand() {
     .stderr(contains("unrecognized subcommand"));
 }
 
-// ── new subcommand ────────────────────────────────────────────────────────────
 
 #[test]
 fn new_help() {
@@ -139,8 +130,6 @@ fn new_missing_both_args() {
 
 #[test]
 fn new_template_arg_is_optional() {
-  // Omitting the template is allowed — `new` falls back to the interactive
-  // picker rather than erroring, so the positional renders as optional in help.
   cmd()
     .args(["new", "--help"])
     .assert()
@@ -149,7 +138,6 @@ fn new_template_arg_is_optional() {
     .stdout(contains("pick interactively"));
 }
 
-// ── auth subcommands ──────────────────────────────────────────────────────────
 
 #[test]
 fn login_help() {
@@ -194,8 +182,6 @@ fn use_help() {
 
 #[test]
 fn use_addon_id_is_optional() {
-  // Omitting the addon id is allowed — `use` falls back to the interactive
-  // addon picker rather than erroring.
   cmd()
     .args(["use", "--help"])
     .assert()
@@ -213,7 +199,6 @@ fn top_level_addon_execution_is_not_available_anymore() {
     .stderr(contains("unrecognized subcommand"));
 }
 
-// ── aliases ───────────────────────────────────────────────────────────────────
 
 #[test]
 fn alias_t_for_template() {
@@ -248,7 +233,6 @@ fn alias_a_for_addon() {
     .stdout(contains("install"));
 }
 
-// ── template subcommand aliases ───────────────────────────────────────────────
 
 #[test]
 fn template_update_missing_arg() {
@@ -259,7 +243,6 @@ fn template_update_missing_arg() {
     .stderr(contains("TEMPLATE_URL"));
 }
 
-// ── addon subcommand aliases ──────────────────────────────────────────────────
 
 #[test]
 fn addon_publish_missing_arg() {
@@ -279,7 +262,6 @@ fn addon_update_missing_arg() {
     .stderr(contains("ADDON_URL"));
 }
 
-// ── version flag ──────────────────────────────────────────────────────────────
 
 #[test]
 fn version_flag() {

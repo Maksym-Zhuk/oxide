@@ -59,9 +59,6 @@ impl PackageManager {
 }
 
 fn detect_pm(root: &Path) -> Result<PackageManager> {
-  // JS lock-files first (most specific), then a bare package.json → npm, then
-  // Cargo.toml → cargo. A JS project never carries Cargo.toml, so this order is
-  // unambiguous in practice.
   if root.join("bun.lock").exists() || root.join("bun.lockb").exists() {
     Ok(PackageManager::Bun)
   } else if root.join("pnpm-lock.yaml").exists() {
@@ -83,9 +80,6 @@ pub fn execute_packages(step: &PackagesStep, project_root: &Path) -> Result<Vec<
   }
   let pm = detect_pm(project_root)?;
 
-  // Snapshot the manifest + lock files up front: restoring them is the whole
-  // reversal — it drops the added dependency entries. node_modules/target are left
-  // alone (harmless; a later install reconciles them).
   let mut rollbacks = Vec::new();
   for name in pm.snapshot_files() {
     let path = project_root.join(name);
@@ -127,9 +121,6 @@ pub fn execute_packages(step: &PackagesStep, project_root: &Path) -> Result<Vec<
   })();
 
   if let Err(err) = result {
-    // A failed install can leave the manifest half-edited; restore our snapshots
-    // so the tree stays clean. (The runner discards rollbacks from a failing step,
-    // so we must do this here rather than rely on it.)
     for rb in rollbacks.iter().rev() {
       if let Rollback::RestoreFile { path, original } = rb {
         let _ = std::fs::write(path, original);
@@ -141,27 +132,8 @@ pub fn execute_packages(step: &PackagesStep, project_root: &Path) -> Result<Vec<
   Ok(rollbacks)
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn detects_by_lockfile_then_manifest() {
-    let dir = std::env::temp_dir().join(format!("anesis-pm-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-
-    // Bare package.json → npm.
-    std::fs::write(dir.join("package.json"), "{}").unwrap();
-    assert!(matches!(detect_pm(&dir).unwrap(), PackageManager::Npm));
-
-    // pnpm lock wins over the plain package.json.
-    std::fs::write(dir.join("pnpm-lock.yaml"), "").unwrap();
-    assert!(matches!(detect_pm(&dir).unwrap(), PackageManager::Pnpm));
-
-    std::fs::remove_dir_all(&dir).unwrap();
-    // No manifest at all → error.
-    std::fs::create_dir_all(&dir).unwrap();
-    assert!(detect_pm(&dir).is_err());
-    std::fs::remove_dir_all(&dir).unwrap();
-  }
+/// Exposes the detected package manager's program name for integration tests,
+/// without leaking the private `PackageManager` enum across the crate boundary.
+pub fn detect_pm_for_tests(root: &Path) -> Result<&'static str> {
+  detect_pm(root).map(|pm| pm.program())
 }

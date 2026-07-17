@@ -120,7 +120,6 @@ fn get_installed_templates_with_entries_is_ok() {
   assert!(get_installed_templates(dir.path()).is_ok());
 }
 
-// ── get_cached_template ───────────────────────────────────────────────────────
 
 #[test]
 fn get_cached_template_returns_entry_when_present() {

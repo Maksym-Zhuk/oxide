@@ -1,14 +1,3 @@
-//! Minimal MCP (Model Context Protocol) stdio server.
-//!
-//! Speaks newline-delimited JSON-RPC 2.0 on stdin/stdout. Rather than re-plumb
-//! every command to keep stdout clean, each tool re-invokes this same binary as
-//! a child process with the existing non-interactive flags (`--yes`, `--input`,
-//! `--json`) and returns its captured output. That reuses all command logic and
-//! keeps the protocol stream (our own stdout) uncontaminated.
-//!
-//! ponytail: one process per tool call. If call volume ever matters, fold the
-//! command dispatch in-process behind a stdout capture instead.
-
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
 
@@ -29,8 +18,6 @@ pub fn run_mcp() -> Result<()> {
       continue;
     };
 
-    // Requests carry an `id` and expect a reply; notifications (e.g.
-    // `notifications/initialized`) have no `id` and get none.
     let Some(id) = req.get("id").cloned() else {
       continue;
     };
@@ -159,7 +146,6 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
   run_self(&mut cmd, cwd.as_deref())
 }
 
-/// Turns an optional `inputs` object into repeated `--input NAME=VALUE` flags.
 fn push_inputs(cmd: &mut Vec<String>, args: &Value) {
   if let Some(obj) = args.get("inputs").and_then(Value::as_object) {
     for (k, v) in obj {
@@ -173,9 +159,6 @@ fn push_inputs(cmd: &mut Vec<String>, args: &Value) {
   }
 }
 
-/// Runs `anesis <args>` as a child of the current binary and returns its
-/// combined output plus whether it failed. stdin is nulled so a child that
-/// tries to prompt fails fast instead of stealing the MCP protocol stream.
 fn run_self(args: &mut [String], cwd: Option<&str>) -> (String, bool) {
   let exe = match std::env::current_exe() {
     Ok(exe) => exe,
@@ -204,25 +187,8 @@ fn run_self(args: &mut [String], cwd: Option<&str>) -> (String, bool) {
   }
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn push_inputs_expands_object_into_flags() {
-    let mut cmd = vec!["use".to_string()];
-    push_inputs(&mut cmd, &json!({ "inputs": { "db": "postgres", "port": 5432 } }));
-    // Order within a JSON object isn't guaranteed, so assert on membership.
-    assert!(cmd.windows(2).any(|w| w[0] == "--input" && w[1] == "db=postgres"));
-    assert!(cmd.windows(2).any(|w| w[0] == "--input" && w[1] == "port=5432"));
-  }
-
-  #[test]
-  fn push_inputs_noop_without_inputs() {
-    let mut cmd = vec!["status".to_string()];
-    push_inputs(&mut cmd, &json!({ "path": "/tmp" }));
-    assert_eq!(cmd, vec!["status".to_string()]);
-  }
+pub fn push_inputs_for_tests(cmd: &mut Vec<String>, args: &Value) {
+  push_inputs(cmd, args)
 }
 
 fn tools_list() -> Value {

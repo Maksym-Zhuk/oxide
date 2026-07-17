@@ -24,12 +24,8 @@ pub struct AnesisTemplate {
   pub anesis_version: String,
   pub repository: AnesisTemplateRepository,
   pub metadata: AnesisTemplateMetadata,
-  // Prompted once when scaffolding; same schema as addon inputs. Values (and their
-  // derived case variants) are exposed to `.tera` files and to `exclude` conditions.
   #[serde(default)]
   pub inputs: Vec<crate::addons::manifest::InputDef>,
-  // Files to omit when a condition holds, e.g. `{ "when": "!use_docker", "paths":
-  // ["Dockerfile"] }`. `when` is `<input>` or `!<input>` against a boolean input.
   #[serde(default)]
   pub exclude: Vec<ExcludeBlock>,
 }

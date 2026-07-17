@@ -1,8 +1,3 @@
-//! Tests for `AppContext`, the shared application context.
-//!
-//! `AppContext::new` fills in the default backend/frontend URLs and carries the
-//! caller-supplied paths, HTTP client and cleanup state through unchanged. These
-//! tests pin that wiring without touching the network.
 
 use std::sync::{Arc, Mutex};
 
@@ -62,7 +57,6 @@ fn cleanup_state_is_shared_via_arc() {
   let cleanup_state: CleanupState = Arc::new(Mutex::new(None));
   let ctx = AppContext::new(make_paths(&tmp), Client::new(), cleanup_state.clone());
 
-  // Mutating the original handle is observable through the context's clone.
   *cleanup_state.lock().unwrap() = Some(tmp.path().join("in-progress"));
 
   assert_eq!(

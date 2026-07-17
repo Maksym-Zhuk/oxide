@@ -125,7 +125,6 @@ fn picker_loop(
     let (cols, rows) = size().unwrap_or((80, 24));
     let width = cols as usize;
 
-    // Smart filter, then rank so the closest name matches sit on top.
     let needle = filter.to_lowercase();
     let tokens = tokenize(&needle);
     let mut matches: Vec<usize> = items
@@ -134,11 +133,9 @@ fn picker_loop(
       .filter(|(_, it)| smart_match(&it.haystack, &tokens))
       .map(|(i, _)| i)
       .collect();
-    // Stable sort keeps input order (e.g. stars) within equal scores.
     matches.sort_by_key(|&i| -match_score(&items[i].name.to_lowercase(), &needle, &tokens));
     selected = selected.min(matches.len().saturating_sub(1));
 
-    // 3 rows per item (header, body, blank); 2 header rows + 1 footer reserved.
     let per_page = ((rows as usize).saturating_sub(4) / 3).max(1);
     let offset = if selected >= per_page {
       selected - per_page + 1
@@ -245,26 +242,14 @@ fn picker_loop(
   }
 }
 
-#[cfg(test)]
-mod tests {
-  use super::{match_score, smart_match, tokenize};
+pub fn tokenize_for_tests(query: &str) -> Vec<&str> {
+  tokenize(query)
+}
 
-  #[test]
-  fn tokens_match_across_separators() {
-    // "react-ts" -> tokens react, ts -> both present, order-independent.
-    assert!(smart_match("react-vite-ts starter", &tokenize("react-ts")));
-    assert!(smart_match("react-vite-ts", &tokenize("ts react")));
-    assert!(smart_match("anything", &tokenize(""))); // empty query matches all
-    assert!(!smart_match("react-vite-ts", &tokenize("vue"))); // missing token fails
-  }
+pub fn smart_match_for_tests(haystack: &str, tokens: &[&str]) -> bool {
+  smart_match(haystack, tokens)
+}
 
-  #[test]
-  fn exact_and_prefix_rank_above_fuzzy() {
-    let q = "react";
-    let toks = tokenize(q);
-    let exact = match_score("react", q, &toks);
-    let prefix = match_score("react-vite-ts", q, &toks);
-    let fuzzy = match_score("preact-remix", q, &toks);
-    assert!(exact > prefix && prefix > fuzzy);
-  }
+pub fn match_score_for_tests(name: &str, query: &str, tokens: &[&str]) -> i32 {
+  match_score(name, query, tokens)
 }

@@ -22,10 +22,6 @@ pub async fn test_addon(
 ) -> Result<()> {
   let fixture = resolve_fixture(ctx, addon_id, project)?;
 
-  // Two identical gitignore-respecting copies: run the addon on `work`, diff it
-  // against the pristine `baseline`. Copying both the same way means anything the
-  // addon didn't touch (node_modules, build output) is identical on both sides and
-  // never shows up in the diff — no exclude guessing needed.
   let baseline = tempfile::Builder::new()
     .prefix("anesis-test-base-")
     .tempdir()?;
@@ -44,7 +40,6 @@ pub async fn test_addon(
     fixture.display()
   );
 
-  // Non-interactive, default inputs; a temp copy so nothing real is modified.
   run_addon_command(
     ctx,
     addon_id,
@@ -69,7 +64,6 @@ fn resolve_fixture(ctx: &AppContext, addon_id: &str, project: Option<String>) ->
     }
     return Ok(path);
   }
-  // Fall back to a `test-fixture/` dir shipped alongside the cached addon.
   let fixture = ctx.paths.addons.join(addon_id).join("test-fixture");
   if fixture.is_dir() {
     return Ok(fixture);
@@ -80,8 +74,6 @@ fn resolve_fixture(ctx: &AppContext, addon_id: &str, project: Option<String>) ->
 }
 
 fn show_diff(baseline: &Path, work: &Path) {
-  // Skip anesis.lock: its rollback journal embeds file contents as byte arrays,
-  // which would bury the addon's actual code changes under thousands of noise lines.
   match Command::new("diff")
     .arg("-ruN")
     .arg("-x")
@@ -90,7 +82,6 @@ fn show_diff(baseline: &Path, work: &Path) {
     .arg(work)
     .output()
   {
-    // diff exits 0 when identical, 1 when they differ; both are success for us.
     Ok(out) => {
       let text = String::from_utf8_lossy(&out.stdout);
       if text.trim().is_empty() {

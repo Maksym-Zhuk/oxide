@@ -20,8 +20,6 @@ pub async fn record_addon_use(ctx: &AppContext, addon_id: &str) {
     return;
   };
   let url = format!("{}/addon/{}/use", ctx.backend_url, addon_id);
-  // Best-effort telemetry: short timeout so a slow network can't stall the
-  // command after its work is already done.
   if let Err(e) = ctx
     .client
     .post(&url)
@@ -251,8 +249,6 @@ pub async fn check_addon_update(
   addon_id: String,
   cached_sha: String,
 ) -> Option<String> {
-  // Locally-linked addons (`anesis addon link`) have no registry entry; never try
-  // to "update" them from the backend.
   if cached_sha == "local" {
     return None;
   }

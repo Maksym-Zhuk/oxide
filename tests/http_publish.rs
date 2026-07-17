@@ -34,7 +34,6 @@ fn make_ctx_without_auth(tmp: &TempDir) -> AppContext {
   AppContext::new(paths, client, cleanup_state)
 }
 
-// ── templates/publish ─────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn template_publish_fails_when_not_logged_in() {
@@ -52,7 +51,6 @@ async fn template_publish_fails_when_not_logged_in() {
   );
 }
 
-// ── templates/update ──────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn template_update_fails_when_not_logged_in() {
@@ -70,7 +68,6 @@ async fn template_update_fails_when_not_logged_in() {
   );
 }
 
-// ── addons/publish ────────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn addon_publish_fails_when_not_logged_in() {
@@ -88,7 +85,6 @@ async fn addon_publish_fails_when_not_logged_in() {
   );
 }
 
-// ── addons/update ─────────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn addon_update_fails_when_not_logged_in() {
@@ -106,7 +102,6 @@ async fn addon_update_fails_when_not_logged_in() {
   );
 }
 
-// ── PublishTemplateDto serialization ─────────────────────────────────────────
 
 #[test]
 fn publish_template_dto_serializes_url() {

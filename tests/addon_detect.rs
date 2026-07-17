@@ -122,11 +122,9 @@ fn no_matching_block_returns_none() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── FileContains negate ───────────────────────────────────────────────────────
 
 #[test]
 fn file_contains_negate_matches_when_content_absent() {
-  // negate=true means: rule passes when the file does NOT contain the string
   let dir = assert_fs::TempDir::new().unwrap();
   dir
     .child("app.js")
@@ -170,7 +168,6 @@ fn file_contains_negate_no_match_when_content_present() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── JsonContains with value ───────────────────────────────────────────────────
 
 #[test]
 fn json_contains_value_matches() {
@@ -234,7 +231,6 @@ fn json_contains_missing_file_no_match() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── TomlContains ──────────────────────────────────────────────────────────────
 
 #[test]
 fn toml_contains_key_path_match() {
@@ -320,7 +316,6 @@ fn toml_contains_missing_file_no_match() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── YamlContains ──────────────────────────────────────────────────────────────
 
 #[test]
 fn yaml_contains_key_path_match() {
@@ -406,7 +401,6 @@ fn yaml_contains_missing_file_no_match() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── MatchMode::All when all rules pass ────────────────────────────────────────
 
 #[test]
 fn match_mode_all_returns_id_when_all_rules_pass() {
@@ -432,7 +426,6 @@ fn match_mode_all_returns_id_when_all_rules_pass() {
   assert_eq!(detect_variant(&detect, dir.path()), Some("ts-node".into()));
 }
 
-// ── Multiple blocks: first match wins ────────────────────────────────────────
 
 #[test]
 fn first_matching_block_is_returned() {
@@ -466,7 +459,6 @@ fn first_matching_block_is_returned() {
 fn second_block_returned_when_first_doesnt_match() {
   let dir = assert_fs::TempDir::new().unwrap();
   dir.child("tsconfig.json").write_str("{}").unwrap();
-  // no package.json → first block misses
 
   let detect = vec![
     DetectBlock {
@@ -490,7 +482,6 @@ fn second_block_returned_when_first_doesnt_match() {
   assert_eq!(detect_variant(&detect, dir.path()), Some("second".into()));
 }
 
-// ── Empty detect list ─────────────────────────────────────────────────────────
 
 #[test]
 fn empty_detect_list_returns_none() {
@@ -498,13 +489,11 @@ fn empty_detect_list_returns_none() {
   assert_eq!(detect_variant(&[], dir.path()), None);
 }
 
-// ── MatchMode::All when one rule fails ────────────────────────────────────────
 
 #[test]
 fn match_mode_all_requires_all_rules_part2() {
   let dir = assert_fs::TempDir::new().unwrap();
   dir.child("package.json").write_str("{}").unwrap();
-  // tsconfig.json is missing → the All block should NOT match
 
   let detect = vec![DetectBlock {
     id: "ts-node".into(),
@@ -524,7 +513,6 @@ fn match_mode_all_requires_all_rules_part2() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── JsonContains negate ───────────────────────────────────────────────────────
 
 #[test]
 fn json_contains_negate_matches_when_key_absent() {
@@ -573,7 +561,6 @@ fn json_contains_negate_no_match_when_key_present() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── TomlContains negate ───────────────────────────────────────────────────────
 
 #[test]
 fn toml_contains_negate_matches_when_key_absent() {
@@ -619,7 +606,6 @@ fn toml_contains_negate_no_match_when_key_present() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── YamlContains negate ───────────────────────────────────────────────────────
 
 #[test]
 fn yaml_contains_negate_matches_when_key_absent() {
@@ -668,7 +654,6 @@ fn yaml_contains_negate_no_match_when_key_present() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-// ── JsonContains with numeric value comparison ─────────────────────────────────
 
 #[test]
 fn json_contains_numeric_value_matches_as_string() {
@@ -692,12 +677,10 @@ fn json_contains_numeric_value_matches_as_string() {
   assert_eq!(detect_variant(&detect, dir.path()), Some("node18".into()));
 }
 
-// ── FileExists negate with missing file ───────────────────────────────────────
 
 #[test]
 fn file_exists_negate_matches_when_file_absent() {
   let dir = assert_fs::TempDir::new().unwrap();
-  // no file created → negate=true should match
 
   let detect = vec![DetectBlock {
     id: "no-file".into(),
@@ -711,12 +694,9 @@ fn file_exists_negate_matches_when_file_absent() {
   assert_eq!(detect_variant(&detect, dir.path()), Some("no-file".into()));
 }
 
-// ── FileContains negate with missing file ─────────────────────────────────────
 
 #[test]
 fn file_contains_negate_matches_when_file_missing() {
-  // If the file doesn't exist, FileContains evaluates to false.
-  // With negate=true that becomes true.
   let dir = assert_fs::TempDir::new().unwrap();
 
   let detect = vec![DetectBlock {

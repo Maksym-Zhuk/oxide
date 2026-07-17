@@ -3,9 +3,6 @@ use std::sync::OnceLock;
 use anesis::auth::server::run_local_auth_server;
 use tokio::sync::{Mutex, MutexGuard};
 
-// Each test in this file starts a real Axum server on 127.0.0.1:8080.
-// The global mutex ensures no two tests bind the same port simultaneously.
-// It's an async-aware mutex so the guard can be held across await points.
 static PORT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 async fn acquire_port() -> MutexGuard<'static, ()> {
@@ -21,7 +18,6 @@ async fn callback_with_valid_state_returns_user() {
   let server_handle =
     tokio::spawn(async move { run_local_auth_server(state_clone, "http://localhost:3000").await });
 
-  // Give the server time to bind before sending the request.
   tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
   let client = reqwest::Client::builder()
@@ -77,7 +73,6 @@ async fn callback_with_invalid_state_redirects_to_error() {
     "expected invalid_state redirect, got: {location}"
   );
 
-  // Server is still running (it didn't accept the request). Abort it.
   server_handle.abort();
 }
 

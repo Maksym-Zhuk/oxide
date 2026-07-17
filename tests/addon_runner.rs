@@ -8,7 +8,6 @@ fn is_newer_compares_semver_not_strings() {
   assert!(is_newer_for_tests("0.10.0", "0.9.0")); // string-compare would say 0.10 < 0.9
   assert!(!is_newer_for_tests("0.1.0", "0.1.0"));
   assert!(!is_newer_for_tests("0.1.0", "0.2.0"));
-  // Unparseable versions fall back to inequality.
   assert!(is_newer_for_tests("2024-05", "2024-04"));
 }
 
@@ -31,7 +30,6 @@ fn rerun_prompt_message_mentions_both_versions_when_version_changed() {
 
 #[test]
 fn rerun_prompt_message_is_none_when_no_prior_version_recorded() {
-  // None means the command has never been executed → no re-run prompt needed.
   let prompt = rerun_prompt_message_for_tests("install", None, "1.0.0");
   assert!(
     prompt.is_none(),

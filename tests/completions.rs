@@ -6,7 +6,6 @@ use anesis::completions::{
 };
 use assert_fs::prelude::*;
 
-// ── upsert_managed_block ─────────────────────────────────────────────────────
 
 #[test]
 fn upsert_managed_block_inserts_into_empty() {
@@ -28,7 +27,6 @@ fn upsert_managed_block_appends_when_absent() {
   assert_eq!(result, "existing content\n\n# start\ncode\n# end\n");
 }
 
-// ── powershell_profile_paths_in ───────────────────────────────────────────────
 
 #[test]
 fn powershell_profile_paths_in_returns_both_profiles() {
@@ -39,7 +37,6 @@ fn powershell_profile_paths_in_returns_both_profiles() {
   assert!(paths[1].ends_with("WindowsPowerShell/Microsoft.PowerShell_profile.ps1"));
 }
 
-// ── template_candidates ───────────────────────────────────────────────────────
 
 #[test]
 fn template_candidates_empty_when_no_cache() {
@@ -47,7 +44,6 @@ fn template_candidates_empty_when_no_cache() {
   assert!(candidates.is_empty());
 }
 
-// ── addon_candidates ──────────────────────────────────────────────────────────
 
 #[test]
 fn addon_candidates_empty_when_no_dir() {
@@ -55,14 +51,12 @@ fn addon_candidates_empty_when_no_dir() {
   assert!(candidates.is_empty());
 }
 
-// ── command_for_paths ─────────────────────────────────────────────────────────
 
 #[test]
 fn command_for_paths_builds_without_panic() {
   let _ = command_for_paths(None, None);
 }
 
-// ── zsh_fpath_snippet ─────────────────────────────────────────────────────────
 
 #[test]
 fn zsh_fpath_snippet_contains_dir_and_compinit() {
@@ -73,7 +67,6 @@ fn zsh_fpath_snippet_contains_dir_and_compinit() {
   assert!(snippet.ends_with("# anesis completions end"));
 }
 
-// ── upsert_zsh_config ─────────────────────────────────────────────────────────
 
 #[test]
 fn upsert_zsh_config_writes_new_file() {
@@ -123,7 +116,6 @@ fn upsert_zsh_config_preserves_existing_content() {
   assert!(content.contains("fpath=(/home/user/.zfunc $fpath)"));
 }
 
-// ── upsert_managed_block edge cases ──────────────────────────────────────────
 
 #[test]
 fn upsert_managed_block_normalises_crlf_line_endings() {
@@ -148,7 +140,6 @@ fn upsert_managed_block_appends_after_content_without_trailing_newline() {
   assert!(result.contains("block"));
 }
 
-// ── template_candidates with real cache data ──────────────────────────────────
 
 #[test]
 fn template_candidates_with_cache_returns_names() {
@@ -185,7 +176,6 @@ fn template_candidates_empty_when_cache_is_corrupt() {
   assert!(candidates.is_empty());
 }
 
-// ── addon_candidates with real addon data ─────────────────────────────────────
 
 #[test]
 fn addon_candidates_with_cache_returns_ids() {

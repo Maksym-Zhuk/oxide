@@ -3,7 +3,6 @@ mod common;
 use assert_fs::prelude::*;
 use common::{generate_state_token_for_tests, write_auth_file_for_tests};
 
-// ── State token ───────────────────────────────────────────────────────────────
 
 #[test]
 fn state_token_is_32_hex_chars() {
@@ -22,7 +21,6 @@ fn state_tokens_are_unique() {
   assert_ne!(t1, t2, "each call should produce a distinct token");
 }
 
-// ── Auth file writing ─────────────────────────────────────────────────────────
 
 #[test]
 fn write_auth_file_creates_file_with_correct_content() {

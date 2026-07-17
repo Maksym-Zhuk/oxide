@@ -36,17 +36,10 @@ pub async fn run_addon_command(
   non_interactive: bool,
   dry_run: bool,
 ) -> Result<()> {
-  // A dry run never prompts and never writes; it collects inputs from presets
-  // and defaults, then prints the plan.
   let non_interactive = non_interactive || dry_run;
   let addon_dir = ctx.paths.addons.join(addon_id);
   let cached = super::cache::get_cached_addon(&ctx.paths.addons, addon_id)?;
 
-  // If the addon is already cached, run from cache immediately and check for a newer
-  // version in the background — the network round-trip then overlaps with the
-  // interactive prompts below instead of blocking before anything runs.
-  // ponytail: this invocation runs the cached addon; a newer version (if any) is
-  // pulled into the cache at the end and used on the next run (npx-style).
   let (manifest, update_check) = if let Some(cached) = cached.filter(|_| addon_dir.exists()) {
     let manifest = read_cached_manifest(&ctx.paths.addons, addon_id)?;
     let handle = tokio::spawn(super::install::check_addon_update(
@@ -58,7 +51,6 @@ pub async fn run_addon_command(
     ));
     (manifest, Some(handle))
   } else {
-    // Not cached yet: we must download before we can run anything.
     let sp = spinner(format!("Fetching addon '{addon_id}'..."));
     let install_result = install_addon(ctx, addon_id)
       .await
@@ -140,9 +132,6 @@ pub async fn run_addon_command(
     }
   }
 
-  // Prompt for inputs only after the variant/command are resolved and the `once`
-  // and prerequisite-command checks have passed, so the user is never asked to
-  // fill in values for a command that will be skipped or rejected.
   let mut tera_ctx = tera::Context::new();
 
   let mut input_values: HashMap<String, String> = HashMap::new();
@@ -185,8 +174,6 @@ pub async fn run_addon_command(
   let mut completed_rollbacks: Vec<Rollback> = Vec::new();
   for (idx, step) in command.steps.iter().enumerate() {
     let label = step_label(step);
-    // Announce each step before it runs so the user can see exactly where an
-    // addon stalls or fails, rather than staring at a silent hang.
     println!("{} {}", format!("[{}/{}]", idx + 1, total).dimmed(), label);
 
     let result = match step {
@@ -201,16 +188,12 @@ pub async fn run_addon_command(
       Step::Packages(s) => execute_packages(s, project_root),
       Step::Run(s) => execute_run(s, project_root, &tera_ctx, non_interactive),
     }
-    // Naming the step here upgrades every bare error a step can raise (e.g. a
-    // `std::fs::read` "No such file or directory") into one that says which
-    // step and file it came from, so the user knows what to fix.
     .with_context(|| format!("step {} ({}) failed", idx + 1, label));
 
     match result {
       Ok(rollbacks) => completed_rollbacks.extend(rollbacks),
       Err(err) => {
         eprintln!("{} {:#}", "✗".red().bold(), err);
-        // Non-interactive runs can't prompt; roll back to leave a clean tree.
         let choice = if non_interactive {
           "Rollback all changes"
         } else {
@@ -234,10 +217,6 @@ pub async fn run_addon_command(
   }
 
   let variant_id = detected_id.unwrap_or_else(|| "universal".to_string());
-  // Accumulate this run's inversions and inputs onto the addon's entry rather than
-  // replacing them, so `undo` reverts every command that ran and `update` can
-  // replay them all with the same inputs. Journal stays in execution order across
-  // commands, so reversing the whole thing unwinds them last-first.
   if let Some(existing) = lock.addons.iter_mut().find(|e| e.id == addon_id) {
     existing.version = manifest.version.clone();
     existing.variant = variant_id;
@@ -270,9 +249,6 @@ pub async fn run_addon_command(
   }
   println!("✓ Command '{}' completed successfully.", command_name);
 
-  // The command ran on the cached addon; if the background check found a newer
-  // version, pull it into the cache now (execution is finished, so re-extracting is
-  // safe) so the next run picks it up.
   if let Some(handle) = update_check
     && matches!(handle.await, Ok(Some(_)))
   {
@@ -318,8 +294,6 @@ pub async fn list_addon_commands(
     result.into_manifest()
   };
 
-  // Show commands for the variant matching this project; fall back to every
-  // command across all variants when nothing matches (e.g. run outside a project).
   let detected_id = detect_variant(&manifest.detect, project_root);
   let matched = manifest
     .variants
@@ -336,7 +310,6 @@ pub async fn list_addon_commands(
     return Ok(());
   }
 
-  // Let the user pick a command interactively, then run the chosen one.
   let items: Vec<PickItem> = commands
     .iter()
     .map(|c| PickItem {
@@ -514,15 +487,11 @@ pub fn collect_inputs(
 ) -> Result<()> {
   let mut missing: Vec<&str> = Vec::new();
   for input in inputs {
-    // A value passed via --input always wins, in both interactive and
-    // non-interactive modes, and is never re-prompted.
     if let Some(preset) = presets.get(&input.name) {
       map.insert(input.name.clone(), preset.clone());
       continue;
     }
     if non_interactive {
-      // No preset: fall back to the default. A required input without a
-      // default can't be resolved without a prompt, so collect it and error.
       match &input.default {
         Some(default) => {
           map.insert(input.name.clone(), default.clone());
@@ -605,10 +574,6 @@ fn prune_empty_dirs(start: Option<&Path>, project_root: &Path) {
 /// inversion journal in reverse. Any file that no longer exists is reported as a
 /// conflict; unless `non_interactive`, the user is asked to confirm before the
 /// journal is applied.
-// ponytail: conflict detection is existence-only — we don't store post-apply
-// hashes, so a file edited-in-place after the addon ran is silently overwritten
-// back to its pre-addon content. Store an expected-content hash per RestoreFile
-// if that ceiling ever bites.
 pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) -> Result<()> {
   let mut lock = LockFile::load(project_root)?;
   let entry = lock
@@ -755,13 +720,9 @@ pub async fn update_addon(
 
   println!("Updating '{addon_id}' v{current} → v{latest}...");
 
-  // Revert the old version (implied by the update, so don't re-prompt), then make
-  // sure the new version is in the cache before replaying.
   if had_journal {
     undo_addon(addon_id, project_root, true)?;
   } else {
-    // No reversible changes recorded — just drop the stale lock entry so the
-    // replay below isn't skipped by the `once` guard.
     let mut lock = LockFile::load(project_root)?;
     lock.remove_addon(addon_id);
     lock.save(project_root)?;
@@ -797,8 +758,6 @@ fn apply_rollback(rollback: Rollback, project_root: &Path) -> Result<()> {
     }
     Rollback::RenameFile { from, to } => {
       std::fs::rename(&from, to)?;
-      // `from` was the move/copy destination; its parent dirs may have been
-      // created just for it and are now empty.
       prune_empty_dirs(from.parent(), project_root);
     }
     Rollback::IrreversibleRun { command } => {

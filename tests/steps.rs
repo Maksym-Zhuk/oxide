@@ -1,15 +1,18 @@
+mod common;
+
 use anesis::addons::{
   manifest::{
     AppendStep, CopyStep, CreateStep, DeleteStep, IfExists, IfNotFound, InjectStep, MoveStep,
-    RenameStep, ReplaceStep, Target,
+    RenameStep, ReplaceStep, RunStep, Target,
   },
   steps::{
     Rollback, append::execute_append, copy::execute_copy, create::execute_create,
     delete::execute_delete, inject::execute_inject, move_step::execute_move,
-    rename::execute_rename, render_string, replace::execute_replace,
+    rename::execute_rename, render_string, replace::execute_replace, run::execute_run,
   },
 };
 use assert_fs::prelude::*;
+use common::addon_detect_pm_for_tests;
 
 fn empty_ctx() -> tera::Context {
   tera::Context::new()
@@ -21,7 +24,6 @@ fn ctx_with(key: &str, val: &str) -> tera::Context {
   c
 }
 
-// ── create ────────────────────────────────────────────────────────────────────
 
 #[test]
 fn create_new_file() {
@@ -79,7 +81,6 @@ fn create_nested_dirs() {
   assert!(dir.path().join("src/components/Button.tsx").exists());
 }
 
-// ── inject ────────────────────────────────────────────────────────────────────
 
 #[test]
 fn inject_after_marker() {
@@ -207,7 +208,6 @@ fn inject_no_marker_prepends() {
   assert_eq!(lines[1], "line2");
 }
 
-// ── replace ───────────────────────────────────────────────────────────────────
 
 #[test]
 fn replace_substitutes_text() {
@@ -282,7 +282,6 @@ fn replace_rollback_is_restore_file() {
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
-// ── append ────────────────────────────────────────────────────────────────────
 
 #[test]
 fn appends_to_existing_file() {
@@ -320,7 +319,6 @@ fn append_rollback_is_restore_file() {
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
-// ── delete ────────────────────────────────────────────────────────────────────
 
 #[test]
 fn deletes_existing_file() {
@@ -367,7 +365,6 @@ fn delete_nonexistent_file_is_ok() {
   assert!(rollbacks.is_empty());
 }
 
-// ── rename ────────────────────────────────────────────────────────────────────
 
 #[test]
 fn renames_file() {
@@ -428,7 +425,6 @@ fn rename_target_exists_is_err() {
   assert!(execute_rename(&step, dir.path(), &tera::Context::new()).is_err());
 }
 
-// ── move ──────────────────────────────────────────────────────────────────────
 
 #[test]
 fn moves_file_to_new_directory() {
@@ -481,7 +477,6 @@ fn move_target_exists_is_err() {
   assert!(execute_move(&step, dir.path(), &tera::Context::new()).is_err());
 }
 
-// ── copy ──────────────────────────────────────────────────────────────────────
 
 #[test]
 fn copy_creates_new_file() {
@@ -595,12 +590,9 @@ fn copy_creates_destination_subdirectory() {
   assert!(project_dir.path().join("subdir/dst.txt").exists());
 }
 
-// ── render_string ─────────────────────────────────────────────────────────────
 
 #[test]
 fn render_string_renders_multiline_control_blocks() {
-  // The whole content is rendered in one pass, so a Tera block that opens on one
-  // line and closes on another works (line-by-line rendering broke this).
   let mut ctx = tera::Context::new();
   ctx.insert("enabled", &true);
   let rendered = render_string("{% if enabled %}\nyes\n{% endif %}", &ctx).unwrap();
@@ -631,7 +623,6 @@ fn render_string_multiple_variables() {
   assert_eq!(result, "my-app");
 }
 
-// ── path traversal via create ─────────────────────────────────────────────────
 
 #[test]
 fn create_path_traversal_blocked() {
@@ -644,7 +635,6 @@ fn create_path_traversal_blocked() {
   assert!(execute_create(&step, dir.path(), &empty_ctx()).is_err());
 }
 
-// ── template variables inside step content ────────────────────────────────────
 
 #[test]
 fn inject_content_uses_template_vars() {
@@ -770,7 +760,6 @@ fn create_uses_template_var_in_path() {
   assert_eq!(content, "ENV=test\n");
 }
 
-// ── append: trailing newline handling ────────────────────────────────────────
 
 #[test]
 fn append_to_file_with_trailing_newline_no_double_newline() {
@@ -790,4 +779,48 @@ fn append_to_file_with_trailing_newline_no_double_newline() {
   let lines: Vec<&str> = content.lines().collect();
   assert_eq!(lines.len(), 2);
   assert_eq!(lines[1], "line2");
+}
+
+
+#[test]
+fn packages_detects_by_lockfile_then_manifest() {
+  let dir = assert_fs::TempDir::new().unwrap();
+
+  dir.child("package.json").write_str("{}").unwrap();
+  assert_eq!(addon_detect_pm_for_tests(dir.path()).unwrap(), "npm");
+
+  dir.child("pnpm-lock.yaml").write_str("").unwrap();
+  assert_eq!(addon_detect_pm_for_tests(dir.path()).unwrap(), "pnpm");
+}
+
+#[test]
+fn packages_no_manifest_is_error() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  assert!(addon_detect_pm_for_tests(dir.path()).is_err());
+}
+
+
+#[test]
+fn run_executes_in_project_root_and_records_irreversible() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let step = RunStep {
+    command: "echo hi > marker.txt".to_string(),
+    description: String::new(),
+  };
+  let rb = execute_run(&step, dir.path(), &empty_ctx(), true).unwrap();
+  assert!(
+    dir.path().join("marker.txt").exists(),
+    "command ran in project root"
+  );
+  assert!(matches!(rb.as_slice(), [Rollback::IrreversibleRun { .. }]));
+}
+
+#[test]
+fn run_nonzero_exit_is_error() {
+  let step = RunStep {
+    command: "exit 3".to_string(),
+    description: String::new(),
+  };
+  let out = execute_run(&step, &std::env::temp_dir(), &empty_ctx(), true);
+  assert!(out.is_err());
 }
