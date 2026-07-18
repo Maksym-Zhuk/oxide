@@ -1,6 +1,6 @@
 [package]
 name = "anesis"
-version = "0.12.4"
+version = "0.12.5"
 edition = "2024"
 authors = ["Maksym <maksymzhuk759@gmail.com>"]
 description = "CLI for scaffolding projects from remote templates and extending them with project addons"
