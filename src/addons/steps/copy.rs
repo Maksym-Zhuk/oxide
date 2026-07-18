@@ -11,9 +11,12 @@ pub fn execute_copy(
   step: &CopyStep,
   addon_dir: &Path,
   project_root: &Path,
+  ctx: &tera::Context,
 ) -> Result<Vec<Rollback>> {
-  let src = super::safe_join(addon_dir, &step.src, "addon source")?;
-  let dest = super::safe_join(project_root, &step.dest, "copy destination")?;
+  let rendered_src = super::render_string(&step.src, ctx)?;
+  let rendered_dest = super::render_string(&step.dest, ctx)?;
+  let src = super::safe_join(addon_dir, &rendered_src, "addon source")?;
+  let dest = super::safe_join(project_root, &rendered_dest, "copy destination")?;
 
   let mut rollbacks = Vec::new();
 
@@ -21,7 +24,7 @@ pub fn execute_copy(
     match step.if_exists {
       IfExists::Skip => return Ok(rollbacks),
       IfExists::Ask => {
-        let overwrite = Confirm::new(&format!("{} already exists. Overwrite?", step.dest))
+        let overwrite = Confirm::new(&format!("{} already exists. Overwrite?", rendered_dest))
           .with_default(false)
           .prompt()?;
         if !overwrite {
@@ -46,6 +49,23 @@ pub fn execute_copy(
   if let Some(parent) = dest.parent() {
     std::fs::create_dir_all(parent)?;
   }
+
+  if step.render {
+    let bytes = std::fs::read(&src)
+      .with_context(|| format!("Failed to read addon source {}", src.display()))?;
+    if let Ok(text) = std::str::from_utf8(&bytes) {
+      let rendered = super::render_string(text, ctx)?;
+      std::fs::write(&dest, rendered)
+        .with_context(|| format!("Failed to write {}", dest.display()))?;
+      let permissions = std::fs::metadata(&src)
+        .with_context(|| format!("Failed to read metadata for {}", src.display()))?
+        .permissions();
+      std::fs::set_permissions(&dest, permissions)
+        .with_context(|| format!("Failed to set permissions on {}", dest.display()))?;
+      return Ok(rollbacks);
+    }
+  }
+
   std::fs::copy(&src, &dest)
     .with_context(|| format!("Failed to copy {} to {}", src.display(), dest.display()))?;
 

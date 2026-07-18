@@ -7,11 +7,6 @@ use crate::{context::AppContext, utils::fs::copy_dir_respecting_gitignore};
 
 use super::{cache::update_addons_cache, manifest::AddonManifest};
 
-/// Validates a local directory as an Anesis addon and copies it into the cache so
-/// `anesis use <id> <command>` can run it without publishing to the registry. The
-/// validation mirrors the server's: the directory must contain a well-formed
-/// `anesis.addon.json`. Returns the addon id it was cached under, or `None` if
-/// the user declined to overwrite an existing cached addon.
 pub fn link_addon(ctx: &AppContext, source: &Path, force: bool) -> Result<Option<String>> {
   let manifest_path = source.join("anesis.addon.json");
   let content = std::fs::read_to_string(&manifest_path).with_context(|| {

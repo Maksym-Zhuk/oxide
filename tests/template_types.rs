@@ -1,6 +1,5 @@
 use anesis::templates::{AnesisTemplate, AnesisTemplateMetadata, AnesisTemplateRepository};
 
-
 #[test]
 fn anesis_template_deserializes_from_json() {
   let json = r#"{
@@ -92,7 +91,6 @@ fn anesis_template_json_round_trip_preserves_all_fields() {
   assert_eq!(restored.metadata.description, original.metadata.description);
 }
 
-
 #[test]
 fn repository_serializes_and_deserializes() {
   let repo = AnesisTemplateRepository {
@@ -102,7 +100,6 @@ fn repository_serializes_and_deserializes() {
   let back: AnesisTemplateRepository = serde_json::from_str(&json).unwrap();
   assert_eq!(back.url, repo.url);
 }
-
 
 #[test]
 fn metadata_deserializes_display_name_camel_case() {

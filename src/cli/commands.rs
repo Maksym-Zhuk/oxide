@@ -218,7 +218,10 @@ pub enum TemplateCommands {
 
 #[derive(Subcommand)]
 pub enum StackCommands {
-  #[command(alias = "i", about = "Download and cache a stack from the registry (anesis stack i)")]
+  #[command(
+    alias = "i",
+    about = "Download and cache a stack from the registry (anesis stack i)"
+  )]
   Install {
     #[arg(help = "Stack id to install")]
     stack_id: String,
@@ -245,22 +248,36 @@ pub enum StackCommands {
     stack_id: String,
   },
 
-  #[command(alias = "p", about = "Publish a GitHub repository as an Anesis stack (anesis stack p)")]
+  #[command(
+    alias = "p",
+    about = "Publish a GitHub repository as an Anesis stack (anesis stack p)"
+  )]
   Publish {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
     stack_url: String,
 
-    #[arg(long, value_name = "VISIBILITY", help = "Visibility: public, private (default: public)")]
+    #[arg(
+      long,
+      value_name = "VISIBILITY",
+      help = "Visibility: public, private (default: public)"
+    )]
     visibility: Option<String>,
 
-    #[arg(long, value_name = "UUID", help = "Credential ID for private GitHub repositories")]
+    #[arg(
+      long,
+      value_name = "UUID",
+      help = "Credential ID for private GitHub repositories"
+    )]
     credential_id: Option<String>,
 
     #[arg(long, value_name = "UUID", help = "Organization ID to publish under")]
     org_id: Option<String>,
   },
 
-  #[command(alias = "u", about = "Republish a stack from its GitHub repository (anesis stack u)")]
+  #[command(
+    alias = "u",
+    about = "Republish a stack from its GitHub repository (anesis stack u)"
+  )]
   Update {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
     stack_url: String,
@@ -268,7 +285,11 @@ pub enum StackCommands {
     #[arg(long, value_name = "VISIBILITY", help = "Visibility: public, private")]
     visibility: Option<String>,
 
-    #[arg(long, value_name = "UUID", help = "Credential ID for private GitHub repositories")]
+    #[arg(
+      long,
+      value_name = "UUID",
+      help = "Credential ID for private GitHub repositories"
+    )]
     credential_id: Option<String>,
 
     #[arg(long, value_name = "UUID", help = "Organization ID")]
@@ -331,7 +352,10 @@ pub enum Commands {
     command: AddonCommands,
   },
 
-  #[command(alias = "s", about = "Manage stacks: template + ordered addons (anesis s)")]
+  #[command(
+    alias = "s",
+    about = "Manage stacks: template + ordered addons (anesis s)"
+  )]
   Stack {
     #[command(subcommand)]
     command: StackCommands,

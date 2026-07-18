@@ -37,7 +37,6 @@ fn make_app_context() -> AppContext {
   AppContext::new(paths, reqwest::Client::new(), Arc::new(Mutex::new(None)))
 }
 
-
 #[test]
 fn kebab_case_replaces_underscores_and_spaces() {
   assert_eq!(to_kebab_case("My_Project Name"), "my-project-name");
@@ -51,7 +50,6 @@ fn snake_case_replaces_hyphens_and_spaces() {
   assert_eq!(to_snake_case("hello"), "hello");
   assert_eq!(to_snake_case("Hello-World"), "hello_world");
 }
-
 
 #[test]
 fn renders_tera_file_and_strips_extension() {
@@ -144,7 +142,6 @@ fn creates_nested_output_directories() {
   assert!(dir.path().join("src/components/Button.tsx").exists());
 }
 
-
 #[test]
 fn pascal_case_from_kebab() {
   assert_eq!(to_pascal_case("my-project-name"), "MyProjectName");
@@ -175,7 +172,6 @@ fn pascal_case_with_spaces() {
   assert_eq!(to_pascal_case("my project name"), "MyProjectName");
 }
 
-
 #[test]
 fn camel_case_from_kebab() {
   assert_eq!(to_camel_case("my-project-name"), "myProjectName");
@@ -201,7 +197,6 @@ fn camel_case_empty_string() {
 fn camel_case_with_spaces() {
   assert_eq!(to_camel_case("my project"), "myProject");
 }
-
 
 #[test]
 fn path_traversal_blocked_by_extract_dir_contents() {
@@ -245,7 +240,6 @@ fn path_traversal_with_tera_file_blocked() {
     "single-level traversal should also be blocked"
   );
 }
-
 
 #[test]
 fn renders_all_three_case_variables() {
@@ -300,7 +294,6 @@ fn multiple_tera_files_rendered_independently() {
   assert_eq!(a, "A: MyApp");
   assert_eq!(b, "B: myapp");
 }
-
 
 #[test]
 fn eval_when_handles_negation_and_missing() {

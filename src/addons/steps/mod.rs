@@ -86,16 +86,19 @@ pub(super) fn safe_join(root: &Path, relative: &str, label: &str) -> Result<Path
 pub(super) fn resolve_target(
   target: &crate::addons::manifest::Target,
   project_root: &Path,
+  ctx: &tera::Context,
 ) -> Result<Vec<PathBuf>> {
   use crate::addons::manifest::Target;
   match target {
     Target::File { file } => {
-      let path = safe_join(project_root, file, "target file")?;
+      let rendered = render_string(file, ctx)?;
+      let path = safe_join(project_root, &rendered, "target file")?;
       Ok(vec![path])
     }
     Target::Glob { glob } => {
-      safe_join(project_root, glob, "glob pattern")?;
-      let pattern = project_root.join(glob).to_string_lossy().to_string();
+      let glob = render_string(glob, ctx)?;
+      safe_join(project_root, &glob, "glob pattern")?;
+      let pattern = project_root.join(&glob).to_string_lossy().to_string();
       let canonical_root = project_root
         .canonicalize()
         .with_context(|| format!("Cannot resolve project root '{}'", project_root.display()))?;

@@ -1,7 +1,6 @@
 use anesis::utils::fs::read_dir_to_files;
 use assert_fs::prelude::*;
 
-
 #[test]
 fn read_flat_dir_returns_all_files() {
   let dir = assert_fs::TempDir::new().unwrap();

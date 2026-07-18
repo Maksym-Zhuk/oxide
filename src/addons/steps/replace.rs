@@ -12,7 +12,7 @@ pub fn execute_replace(
   project_root: &Path,
   ctx: &tera::Context,
 ) -> Result<Vec<Rollback>> {
-  let paths = resolve_target(&step.target, project_root)?;
+  let paths = resolve_target(&step.target, project_root, ctx)?;
   let rendered_replace = render_string(&step.replace, ctx)?;
 
   let mut rollbacks = Vec::new();

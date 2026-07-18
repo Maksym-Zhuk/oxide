@@ -7,6 +7,10 @@ use crate::addons::manifest::{IfNotFound, InjectStep};
 
 use super::{Rollback, render_string, resolve_target};
 
+fn normalize_whitespace(s: &str) -> String {
+  s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 pub fn execute_inject(
   step: &InjectStep,
   project_root: &Path,
@@ -18,7 +22,7 @@ pub fn execute_inject(
     ));
   }
 
-  let paths = resolve_target(&step.target, project_root)?;
+  let paths = resolve_target(&step.target, project_root, ctx)?;
   let rendered: Vec<String> = render_string(&step.content, ctx)?
     .lines()
     .map(str::to_string)
@@ -39,7 +43,11 @@ pub fn execute_inject(
     let marker = step.after.as_deref().or(step.before.as_deref());
 
     if let Some(marker) = marker {
-      match file_lines.iter().position(|l| l.contains(marker)) {
+      let normalized_marker = normalize_whitespace(marker);
+      match file_lines
+        .iter()
+        .position(|l| normalize_whitespace(l).contains(&normalized_marker))
+      {
         Some(idx) => {
           let insert_idx = if step.after.is_some() { idx + 1 } else { idx };
           for (i, line) in rendered.iter().enumerate() {

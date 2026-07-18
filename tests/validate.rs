@@ -2,7 +2,6 @@ use anesis::utils::validate::{
   is_valid_github_repo_url, validate_project_name, validate_template_name,
 };
 
-
 #[test]
 fn project_name_dot_is_valid() {
   assert!(validate_project_name(".").is_ok());
@@ -61,7 +60,6 @@ fn project_name_reserved_windows() {
   }
 }
 
-
 #[test]
 fn github_url_valid() {
   assert!(is_valid_github_repo_url("https://github.com/owner/repo").is_ok());
@@ -85,7 +83,6 @@ fn github_url_no_repo_path() {
   assert!(is_valid_github_repo_url("https://github.com/owner").is_err());
   assert!(is_valid_github_repo_url("https://github.com/").is_err());
 }
-
 
 #[test]
 fn template_name_valid() {

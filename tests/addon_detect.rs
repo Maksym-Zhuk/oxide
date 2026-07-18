@@ -122,7 +122,6 @@ fn no_matching_block_returns_none() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-
 #[test]
 fn file_contains_negate_matches_when_content_absent() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -167,7 +166,6 @@ fn file_contains_negate_no_match_when_content_present() {
 
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
-
 
 #[test]
 fn json_contains_value_matches() {
@@ -230,7 +228,6 @@ fn json_contains_missing_file_no_match() {
 
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
-
 
 #[test]
 fn toml_contains_key_path_match() {
@@ -316,7 +313,6 @@ fn toml_contains_missing_file_no_match() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-
 #[test]
 fn yaml_contains_key_path_match() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -401,7 +397,6 @@ fn yaml_contains_missing_file_no_match() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-
 #[test]
 fn match_mode_all_returns_id_when_all_rules_pass() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -425,7 +420,6 @@ fn match_mode_all_returns_id_when_all_rules_pass() {
 
   assert_eq!(detect_variant(&detect, dir.path()), Some("ts-node".into()));
 }
-
 
 #[test]
 fn first_matching_block_is_returned() {
@@ -482,13 +476,11 @@ fn second_block_returned_when_first_doesnt_match() {
   assert_eq!(detect_variant(&detect, dir.path()), Some("second".into()));
 }
 
-
 #[test]
 fn empty_detect_list_returns_none() {
   let dir = assert_fs::TempDir::new().unwrap();
   assert_eq!(detect_variant(&[], dir.path()), None);
 }
-
 
 #[test]
 fn match_mode_all_requires_all_rules_part2() {
@@ -512,7 +504,6 @@ fn match_mode_all_requires_all_rules_part2() {
 
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
-
 
 #[test]
 fn json_contains_negate_matches_when_key_absent() {
@@ -561,7 +552,6 @@ fn json_contains_negate_no_match_when_key_present() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-
 #[test]
 fn toml_contains_negate_matches_when_key_absent() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -605,7 +595,6 @@ fn toml_contains_negate_no_match_when_key_present() {
 
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
-
 
 #[test]
 fn yaml_contains_negate_matches_when_key_absent() {
@@ -654,7 +643,6 @@ fn yaml_contains_negate_no_match_when_key_present() {
   assert_eq!(detect_variant(&detect, dir.path()), None);
 }
 
-
 #[test]
 fn json_contains_numeric_value_matches_as_string() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -677,7 +665,6 @@ fn json_contains_numeric_value_matches_as_string() {
   assert_eq!(detect_variant(&detect, dir.path()), Some("node18".into()));
 }
 
-
 #[test]
 fn file_exists_negate_matches_when_file_absent() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -693,7 +680,6 @@ fn file_exists_negate_matches_when_file_absent() {
 
   assert_eq!(detect_variant(&detect, dir.path()), Some("no-file".into()));
 }
-
 
 #[test]
 fn file_contains_negate_matches_when_file_missing() {

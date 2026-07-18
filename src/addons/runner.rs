@@ -177,12 +177,12 @@ pub async fn run_addon_command(
     println!("{} {}", format!("[{}/{}]", idx + 1, total).dimmed(), label);
 
     let result = match step {
-      Step::Copy(s) => execute_copy(s, &addon_dir, project_root),
+      Step::Copy(s) => execute_copy(s, &addon_dir, project_root, &tera_ctx),
       Step::Create(s) => execute_create(s, project_root, &tera_ctx),
       Step::Inject(s) => execute_inject(s, project_root, &tera_ctx),
       Step::Replace(s) => execute_replace(s, project_root, &tera_ctx),
       Step::Append(s) => execute_append(s, project_root, &tera_ctx),
-      Step::Delete(s) => execute_delete(s, project_root),
+      Step::Delete(s) => execute_delete(s, project_root, &tera_ctx),
       Step::Rename(s) => execute_rename(s, project_root, &tera_ctx),
       Step::Move(s) => execute_move(s, project_root, &tera_ctx),
       Step::Packages(s) => execute_packages(s, project_root),
@@ -270,9 +270,6 @@ pub async fn run_addon_command(
   Ok(())
 }
 
-/// Prints the commands an addon exposes for the current project. Used by
-/// `anesis use <addon>` when no command name is given, so users can discover
-/// what's runnable without having to read the manifest.
 pub async fn list_addon_commands(
   ctx: &AppContext,
   addon_id: &str,
@@ -346,9 +343,6 @@ pub async fn list_addon_commands(
   }
 }
 
-/// A short human-readable description of what a step does, used both for the
-/// per-step progress line and for error context so the user can see which file
-/// a failure came from.
 fn step_label(step: &Step) -> String {
   use crate::addons::manifest::Target;
   fn target(t: &Target) -> &str {
@@ -374,9 +368,6 @@ fn step_label(step: &Step) -> String {
   }
 }
 
-/// Prints the resolved plan for `--dry-run`: the selected variant, the inputs
-/// that were collected (from presets/defaults), and each step in order. Writes
-/// nothing to disk.
 fn print_dry_run_plan(
   addon_id: &str,
   command_name: &str,
@@ -476,9 +467,6 @@ pub fn rerun_prompt_message_for_tests(
   rerun_prompt_message(command_name, locked_version, current_version)
 }
 
-/// Resolves input values: a preset (`--input`) wins, else the default; in
-/// interactive mode a missing value is prompted, otherwise a required input with
-/// no default is an error. Shared by the addon runner and template scaffolding.
 pub fn collect_inputs(
   inputs: &[InputDef],
   presets: &HashMap<String, String>,
@@ -556,10 +544,6 @@ fn insert_with_derived(ctx: &mut tera::Context, map: &HashMap<String, String>) {
   }
 }
 
-/// Removes now-empty directories walking up from `start` toward (but not
-/// including) `project_root`, stopping at the first non-empty or undeletable
-/// directory. Used to clean up parent directories that a step's
-/// `create_dir_all` left behind once its file is removed/moved back.
 fn prune_empty_dirs(start: Option<&Path>, project_root: &Path) {
   let mut dir = start;
   while let Some(d) = dir {
@@ -570,10 +554,6 @@ fn prune_empty_dirs(start: Option<&Path>, project_root: &Path) {
   }
 }
 
-/// Reverts the last applied command-set of `addon_id` by replaying its stored
-/// inversion journal in reverse. Any file that no longer exists is reported as a
-/// conflict; unless `non_interactive`, the user is asked to confirm before the
-/// journal is applied.
 pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) -> Result<()> {
   let mut lock = LockFile::load(project_root)?;
   let entry = lock
@@ -637,9 +617,6 @@ pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) ->
   Ok(())
 }
 
-/// True if `latest` is a strictly newer semver than `current`. Falls back to a
-/// plain string inequality if either version can't be parsed as semver, so a
-/// non-standard version scheme still flags *some* change rather than none.
 fn is_newer(latest: &str, current: &str) -> bool {
   match (
     semver::Version::parse(latest),
@@ -655,8 +632,6 @@ pub fn is_newer_for_tests(latest: &str, current: &str) -> bool {
   is_newer(latest, current)
 }
 
-/// Compares each applied addon's locked version against the registry's latest and
-/// prints the ones that have a newer version available.
 pub async fn outdated(ctx: &AppContext, project_root: &Path) -> Result<()> {
   let lock = LockFile::load(project_root)?;
   if lock.addons.is_empty() {
@@ -688,9 +663,6 @@ pub async fn outdated(ctx: &AppContext, project_root: &Path) -> Result<()> {
   Ok(())
 }
 
-/// Upgrades an applied addon to the registry's latest version: reverts the old
-/// version's changes, installs the new one, then replays the same commands with
-/// the inputs saved in `anesis.lock`.
 pub async fn update_addon(
   ctx: &AppContext,
   addon_id: &str,

@@ -5,7 +5,6 @@ fn cmd() -> Command {
   assert_cmd::cargo::cargo_bin_cmd!("anesis")
 }
 
-
 #[test]
 fn help_flag() {
   cmd()
@@ -19,7 +18,6 @@ fn help_flag() {
 fn no_args_shows_help() {
   cmd().assert().failure();
 }
-
 
 #[test]
 fn template_help() {
@@ -71,7 +69,6 @@ fn template_unknown_subcommand() {
     .stderr(contains("unrecognized subcommand"));
 }
 
-
 #[test]
 fn addon_help() {
   cmd()
@@ -112,7 +109,6 @@ fn addon_unknown_subcommand() {
     .stderr(contains("unrecognized subcommand"));
 }
 
-
 #[test]
 fn new_help() {
   cmd()
@@ -137,7 +133,6 @@ fn new_template_arg_is_optional() {
     .stdout(contains("[TEMPLATE_NAME]"))
     .stdout(contains("pick interactively"));
 }
-
 
 #[test]
 fn login_help() {
@@ -199,7 +194,6 @@ fn top_level_addon_execution_is_not_available_anymore() {
     .stderr(contains("unrecognized subcommand"));
 }
 
-
 #[test]
 fn alias_t_for_template() {
   cmd()
@@ -233,7 +227,6 @@ fn alias_a_for_addon() {
     .stdout(contains("install"));
 }
 
-
 #[test]
 fn template_update_missing_arg() {
   cmd()
@@ -242,7 +235,6 @@ fn template_update_missing_arg() {
     .failure()
     .stderr(contains("TEMPLATE_URL"));
 }
-
 
 #[test]
 fn addon_publish_missing_arg() {
@@ -261,7 +253,6 @@ fn addon_update_missing_arg() {
     .failure()
     .stderr(contains("ADDON_URL"));
 }
-
 
 #[test]
 fn version_flag() {

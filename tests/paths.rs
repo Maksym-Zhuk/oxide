@@ -1,6 +1,5 @@
 use anesis::paths::AnesisPaths;
 
-
 #[test]
 fn new_returns_ok() {
   assert!(AnesisPaths::new().is_ok());
@@ -54,7 +53,6 @@ fn addons_index_is_under_addons() {
     "anesis-addons.json"
   );
 }
-
 
 #[test]
 fn ensure_directories_creates_cache_dir() {

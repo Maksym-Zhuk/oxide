@@ -8,11 +8,12 @@ use anyhow::{Result, anyhow};
 use tera::{Context, Tera};
 
 use crate::{
-  cache::get_cached_template,
   context::AppContext,
   manifest::AnesisManifest,
   templates::{AnesisTemplate, ExcludeBlock, TemplateFile},
 };
+
+use super::cache::get_cached_template;
 
 pub fn extract_template(
   files: &[TemplateFile],

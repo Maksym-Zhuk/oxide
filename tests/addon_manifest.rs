@@ -1,6 +1,5 @@
 use anesis::addons::manifest::*;
 
-
 #[test]
 fn minimal_manifest_deserializes() {
   let yaml = r#"
@@ -40,7 +39,6 @@ requires:
   let manifest: AddonManifest = serde_yaml::from_str(yaml).unwrap();
   assert_eq!(manifest.requires, ["node", "npm"]);
 }
-
 
 #[test]
 fn input_type_text_deserializes() {
@@ -83,7 +81,6 @@ options:
   assert!(matches!(input.input_type, InputType::Select));
   assert_eq!(input.options, ["npm", "yarn", "pnpm"]);
 }
-
 
 #[test]
 fn detect_block_file_exists_rule() {
@@ -162,7 +159,6 @@ rules:
   let block: DetectBlock = serde_yaml::from_str(yaml).unwrap();
   assert!(matches!(block.match_mode, MatchMode::Any));
 }
-
 
 #[test]
 fn copy_step_deserializes() {
@@ -302,7 +298,6 @@ to: src/new-dir
   }
 }
 
-
 #[test]
 fn if_not_found_defaults_to_warn_and_ask() {
   let yaml = r##"
@@ -333,7 +328,6 @@ if_not_found: error
     assert!(matches!(s.if_not_found, IfNotFound::Error));
   }
 }
-
 
 #[test]
 fn variant_with_condition_and_commands() {
@@ -366,7 +360,6 @@ commands:
   let variant: Variant = serde_yaml::from_str(yaml).unwrap();
   assert!(variant.when.is_none());
 }
-
 
 #[test]
 fn full_manifest_yaml_round_trip() {

@@ -22,7 +22,6 @@ fn make_manifest(id: &str) -> AddonManifest {
   }
 }
 
-
 #[test]
 fn update_addons_cache_adds_entry() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -69,7 +68,6 @@ fn update_addons_cache_stores_multiple_addons() {
   assert_eq!(cache.addons.len(), 2);
 }
 
-
 #[test]
 fn get_cached_addon_returns_entry_when_present() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -95,7 +93,6 @@ fn get_cached_addon_returns_none_when_no_index() {
   let result = get_cached_addon(dir.path(), "drizzle").unwrap();
   assert!(result.is_none());
 }
-
 
 #[test]
 fn remove_addon_removes_entry() {
@@ -148,7 +145,6 @@ fn remove_addon_keeps_other_addons() {
   assert!(result.is_some());
 }
 
-
 #[test]
 fn is_addon_installed_true_when_in_cache_and_dir_exists() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -175,7 +171,6 @@ fn is_addon_installed_false_when_dir_missing() {
 
   assert!(!is_addon_installed(dir.path(), "drizzle").unwrap());
 }
-
 
 #[test]
 fn get_installed_addons_no_index_is_ok() {

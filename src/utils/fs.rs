@@ -5,13 +5,10 @@ use ignore::WalkBuilder;
 
 use crate::templates::TemplateFile;
 
-/// Copies every file under `source` into `dest`, honoring `.gitignore` rules and
-/// always skipping `.git`. Used to cache a local project as a template/addon
-/// without publishing it — mirrors what a GitHub archive would contain.
 pub fn copy_dir_respecting_gitignore(source: &Path, dest: &Path) -> Result<()> {
   for entry in WalkBuilder::new(source)
-    .hidden(false) // keep dotfiles like .env.example / .eslintrc
-    .require_git(false) // respect .gitignore even outside a git repo
+    .hidden(false)
+    .require_git(false)
     .filter_entry(|e| e.file_name() != ".git")
     .build()
   {

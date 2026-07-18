@@ -136,6 +136,12 @@ pub struct CopyStep {
   pub dest: String,
   #[serde(default)]
   pub if_exists: IfExists,
+  #[serde(default = "default_true")]
+  pub render: bool,
+}
+
+fn default_true() -> bool {
+  true
 }
 
 #[derive(Debug, Serialize, Deserialize)]

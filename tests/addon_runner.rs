@@ -5,7 +5,7 @@ use common::{is_newer_for_tests, rerun_prompt_message_for_tests};
 #[test]
 fn is_newer_compares_semver_not_strings() {
   assert!(is_newer_for_tests("0.2.0", "0.1.0"));
-  assert!(is_newer_for_tests("0.10.0", "0.9.0")); // string-compare would say 0.10 < 0.9
+  assert!(is_newer_for_tests("0.10.0", "0.9.0"));
   assert!(!is_newer_for_tests("0.1.0", "0.1.0"));
   assert!(!is_newer_for_tests("0.1.0", "0.2.0"));
   assert!(is_newer_for_tests("2024-05", "2024-04"));

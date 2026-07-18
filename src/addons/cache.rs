@@ -29,7 +29,6 @@ pub struct CachedAddon {
 }
 
 impl CachedAddon {
-  /// Interactive-picker row for a locally cached addon.
   pub fn to_pick_item(&self) -> PickItem {
     let meta = if self.version.is_empty() {
       String::new()
@@ -47,7 +46,6 @@ impl CachedAddon {
   }
 }
 
-/// Reads the locally cached addons (the `--installed` picker source).
 pub fn read_installed_addons(addons_dir: &Path) -> Result<Vec<CachedAddon>> {
   Ok(read_cache(addons_dir)?.addons)
 }

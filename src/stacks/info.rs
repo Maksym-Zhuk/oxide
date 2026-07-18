@@ -8,7 +8,6 @@ use super::{
 };
 use crate::context::AppContext;
 
-/// Prints installed stacks as a table, or the whole set as JSON.
 pub fn print_installed_stacks(ctx: &AppContext, json: bool) -> Result<()> {
   let stacks = read_installed_stacks(ctx)?;
   if json {
@@ -30,7 +29,6 @@ pub fn print_installed_stacks(ctx: &AppContext, json: bool) -> Result<()> {
   Ok(())
 }
 
-/// Prints a single stack's composition (template + addon steps) or its JSON.
 pub async fn stack_info(ctx: &AppContext, stack_id: &str, json: bool) -> Result<()> {
   let manifest = match fetch_stack_manifest(ctx, stack_id).await {
     Ok(m) => m,
@@ -47,7 +45,11 @@ pub async fn stack_info(ctx: &AppContext, stack_id: &str, json: bool) -> Result<
     println!("{}", serde_json::to_string_pretty(&manifest)?);
     return Ok(());
   }
-  println!("{} {}", manifest.name.bold(), format!("({})", manifest.id).dimmed());
+  println!(
+    "{} {}",
+    manifest.name.bold(),
+    format!("({})", manifest.id).dimmed()
+  );
   if !manifest.description.is_empty() {
     println!("{}", manifest.description);
   }

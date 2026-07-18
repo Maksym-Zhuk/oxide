@@ -1,6 +1,6 @@
 mod common;
 
-use anesis::{cache::CachedTemplate, templates::install::InstallResult};
+use anesis::{templates::cache::CachedTemplate, templates::install::InstallResult};
 use common::template_classify_install_state_for_tests;
 
 fn cached_template(commit_sha: &str) -> CachedTemplate {

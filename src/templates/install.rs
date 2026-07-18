@@ -7,10 +7,11 @@ use serde::Deserialize;
 
 use crate::{
   auth::token::get_auth_user,
-  cache::{CachedTemplate, get_cached_template, update_templates_cache},
   context::AppContext,
   utils::{archive::download_and_extract, errors::classify_reqwest_error, ui::spinner},
 };
+
+use super::cache::{CachedTemplate, get_cached_template, update_templates_cache};
 
 pub async fn record_template_use(ctx: &AppContext, template_name: &str) {
   let Ok(user) = get_auth_user(&ctx.paths.auth) else {
@@ -110,12 +111,16 @@ async fn get_template_info(
   auth_path: &Path,
   backend_url: &str,
 ) -> Result<TemplateInfoRes> {
-  let user = get_auth_user(auth_path)?;
+  let token = get_auth_user(auth_path).ok().map(|u| u.token);
 
-  let response = client
+  let mut req = client
     .get(format!("{backend_url}/template/{template_name}/url"))
-    .bearer_auth(user.token)
-    .header("Content-Type", "application/json")
+    .header("Content-Type", "application/json");
+  if let Some(token) = token {
+    req = req.bearer_auth(token);
+  }
+
+  let response = req
     .send()
     .await
     .with_context(|| format!("Failed to connect to server for template '{template_name}'"))?;

@@ -1,7 +1,3 @@
-/// Tests for template and addon publish/update that don't require a real network.
-///
-/// The "not logged in" branch fires before any HTTP request is made, so these
-/// tests exercise the auth check and early-return behaviour in isolation.
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -21,7 +17,7 @@ fn make_ctx_without_auth(tmp: &TempDir) -> AppContext {
     version_check: tmp.path().join("version_check.json"),
     cache: tmp.path().join("cache"),
     templates: tmp.path().join("cache/templates"),
-    auth: tmp.path().join("auth.json"), // file does not exist → not logged in
+    auth: tmp.path().join("auth.json"),
     addons: tmp.path().join("cache/addons"),
     addons_index: tmp.path().join("cache/addons/anesis-addons.json"),
     stacks: tmp.path().join("cache/stacks"),
@@ -33,7 +29,6 @@ fn make_ctx_without_auth(tmp: &TempDir) -> AppContext {
   let cleanup_state = Arc::new(Mutex::new(None));
   AppContext::new(paths, client, cleanup_state)
 }
-
 
 #[tokio::test]
 async fn template_publish_fails_when_not_logged_in() {
@@ -51,7 +46,6 @@ async fn template_publish_fails_when_not_logged_in() {
   );
 }
 
-
 #[tokio::test]
 async fn template_update_fails_when_not_logged_in() {
   let tmp = TempDir::new().unwrap();
@@ -67,7 +61,6 @@ async fn template_update_fails_when_not_logged_in() {
     "expected NotLoggedIn, got: {err}"
   );
 }
-
 
 #[tokio::test]
 async fn addon_publish_fails_when_not_logged_in() {
@@ -85,7 +78,6 @@ async fn addon_publish_fails_when_not_logged_in() {
   );
 }
 
-
 #[tokio::test]
 async fn addon_update_fails_when_not_logged_in() {
   let tmp = TempDir::new().unwrap();
@@ -101,7 +93,6 @@ async fn addon_update_fails_when_not_logged_in() {
     "expected NotLoggedIn, got: {err}"
   );
 }
-
 
 #[test]
 fn publish_template_dto_serializes_url() {

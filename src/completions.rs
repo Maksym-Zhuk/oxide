@@ -15,9 +15,9 @@ use clap_complete::{
 
 use crate::{
   addons::{cache::AddonsCache, manifest::AddonManifest},
-  cache::TemplatesCache,
   cli,
   paths::AnesisPaths,
+  templates::cache::TemplatesCache,
 };
 
 const COMPLETE_ENV_VAR: &str = "COMPLETE";

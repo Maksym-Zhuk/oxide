@@ -11,9 +11,6 @@ use crate::{context::AppContext, utils::fs::copy_dir_respecting_gitignore};
 
 use super::runner::run_addon_command;
 
-/// Runs an addon command against a throwaway copy of a fixture project and prints
-/// the resulting diff, leaving the original untouched. Used to preview what an
-/// addon does before applying it for real.
 pub async fn test_addon(
   ctx: &AppContext,
   addon_id: &str,

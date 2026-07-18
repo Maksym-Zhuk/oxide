@@ -11,8 +11,6 @@ use crossterm::{
 
 use crate::utils::ui::truncate;
 
-/// What a picked entry is, used both for the `[tag]` shown in `search` and to
-/// colour it, across the three registry kinds.
 #[derive(Clone, Copy, PartialEq)]
 pub enum ItemKind {
   Template,
@@ -30,11 +28,8 @@ impl ItemKind {
   }
 }
 
-/// One row in the interactive picker. `meta` is the raw ` · a · b` suffix drawn
-/// after the name; `haystack` is the lowercased text the filter matches against.
 pub struct PickItem {
   pub kind: ItemKind,
-  /// Value returned to the caller (template name / addon id).
   pub id: String,
   pub name: String,
   pub meta: String,
@@ -42,7 +37,6 @@ pub struct PickItem {
   pub haystack: String,
 }
 
-/// Query split into tokens on any non-alphanumeric char (empties dropped).
 fn tokenize(query: &str) -> Vec<&str> {
   query
     .split(|c: char| !c.is_alphanumeric())
@@ -50,14 +44,10 @@ fn tokenize(query: &str) -> Vec<&str> {
     .collect()
 }
 
-/// Smart match: every query token must appear as a substring somewhere in the
-/// entry. So `react-ts` (tokens `react`, `ts`) matches `react-vite-ts`.
 fn smart_match(haystack: &str, tokens: &[&str]) -> bool {
   tokens.iter().all(|tok| haystack.contains(tok))
 }
 
-/// Relevance score (higher = better) so exact/name matches sort to the top.
-/// Ranks by how the query hits the *name*, since that's what a user types.
 fn match_score(name: &str, query: &str, tokens: &[&str]) -> i32 {
   let mut score = 0;
   if name == query {
@@ -71,13 +61,6 @@ fn match_score(name: &str, query: &str, tokens: &[&str]) -> i32 {
   score
 }
 
-/// Runs the interactive picker over `items`. `title` heads the list; `show_kind`
-/// draws a `[template]`/`[addon]` tag before each name (on for mixed `search`,
-/// off for the template-only `new` flow). `initial_filter` pre-seeds the query.
-///
-/// Returns the chosen item's index, or `None` if the user cancelled (esc/ctrl-c).
-/// Renders to stderr with a full clear+redraw each frame so scrolling never
-/// garbles — inquire can't do the two-line-per-item layout without corrupting it.
 pub fn pick(
   items: &[PickItem],
   title: &str,
@@ -93,9 +76,6 @@ pub fn pick(
   result
 }
 
-/// Async wrapper around [`pick`]: moves the (blocking) event loop off the
-/// worker thread and hands back the chosen entry's `(kind, id, name)`, or
-/// `None` when cancelled. Every command that shows a picker goes through this.
 pub async fn pick_one(
   items: Vec<PickItem>,
   title: impl Into<String>,

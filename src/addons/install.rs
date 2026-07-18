@@ -134,12 +134,16 @@ async fn get_addon_url_raw(
   auth_path: &Path,
   addon_id: &str,
 ) -> Result<AddonUrlResponse> {
-  let user = get_auth_user(auth_path)?;
+  let token = get_auth_user(auth_path).ok().map(|u| u.token);
 
-  let response = client
+  let mut req = client
     .get(format!("{backend_url}/addon/{addon_id}/url"))
-    .bearer_auth(user.token)
-    .header("Content-Type", "application/json")
+    .header("Content-Type", "application/json");
+  if let Some(token) = token {
+    req = req.bearer_auth(token);
+  }
+
+  let response = req
     .send()
     .await
     .with_context(|| format!("Failed to fetch download URL for addon '{addon_id}'"))?;
@@ -238,10 +242,6 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
   })
 }
 
-/// Network-only update check, suitable for running in a background task while the
-/// cached addon is being used. Returns `Some(latest_sha)` if the backend reports a
-/// commit different from `cached_sha`, otherwise `None` (including on any error, so a
-/// flaky network never blocks or fails the command in progress).
 pub async fn check_addon_update(
   client: Client,
   backend_url: String,
@@ -258,8 +258,6 @@ pub async fn check_addon_update(
   (info.commit_sha != cached_sha).then_some(info.commit_sha)
 }
 
-/// Fetches the registry's latest version for an addon without downloading it.
-/// Used by `anesis outdated`/`update` to compare against the locked version.
 pub async fn fetch_latest_version(ctx: &AppContext, addon_id: &str) -> Result<String> {
   Ok(get_addon_url(ctx, addon_id).await?.version)
 }

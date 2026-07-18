@@ -1,10 +1,10 @@
 use anesis::{
-  cache::{
+  context::AppContext,
+  paths::AnesisPaths,
+  templates::cache::{
     TemplatesCache, get_cached_template, get_installed_templates, remove_template_from_cache,
     update_templates_cache,
   },
-  context::AppContext,
-  paths::AnesisPaths,
 };
 use assert_fs::prelude::*;
 
@@ -119,7 +119,6 @@ fn get_installed_templates_with_entries_is_ok() {
 
   assert!(get_installed_templates(dir.path()).is_ok());
 }
-
 
 #[test]
 fn get_cached_template_returns_entry_when_present() {

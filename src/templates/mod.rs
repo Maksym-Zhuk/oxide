@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+pub mod cache;
 pub mod catalog;
 pub mod generator;
 pub mod info;

@@ -4,7 +4,6 @@ use std::path::Path;
 
 use common::strip_archive_path_for_tests;
 
-
 #[test]
 fn strips_single_root_component() {
   let raw = Path::new("owner-repo-abc123/src/main.rs");
@@ -38,7 +37,6 @@ fn returns_none_for_bare_root_component() {
     "a path with only the root component produces an empty remainder"
   );
 }
-
 
 #[test]
 fn strips_subdir_prefix_from_matching_entry() {

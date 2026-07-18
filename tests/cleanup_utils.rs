@@ -41,7 +41,7 @@ fn stops_removing_parents_when_dir_is_not_empty() {
   let sibling = group.join("other-template");
   let target = group.join("my-template");
   std::fs::create_dir_all(&target).unwrap();
-  std::fs::create_dir_all(&sibling).unwrap(); // sibling keeps "group" non-empty
+  std::fs::create_dir_all(&sibling).unwrap();
 
   cleanup_incomplete_template_for_tests(&target, &templates_dir);
 

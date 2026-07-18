@@ -24,7 +24,6 @@ fn ctx_with(key: &str, val: &str) -> tera::Context {
   c
 }
 
-
 #[test]
 fn create_new_file() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -81,7 +80,6 @@ fn create_nested_dirs() {
   assert!(dir.path().join("src/components/Button.tsx").exists());
 }
 
-
 #[test]
 fn inject_after_marker() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -136,6 +134,30 @@ fn inject_before_marker() {
     .collect();
   assert_eq!(lines[0], "// header");
   assert_eq!(lines[1], "const app = express();");
+}
+
+#[test]
+fn inject_marker_whitespace_insensitive() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir
+    .child("app.module.ts")
+    .write_str("@Module({\n  imports: [\n    //  anesis:module-imports\n  ],\n})\n")
+    .unwrap();
+
+  let step = InjectStep {
+    target: Target::File {
+      file: "app.module.ts".into(),
+    },
+    content: "    FooModule,".into(),
+    after: None,
+    before: Some("\t\t// anesis:module-imports".into()),
+    if_not_found: IfNotFound::Error,
+  };
+
+  execute_inject(&step, dir.path(), &empty_ctx()).unwrap();
+
+  let content = std::fs::read_to_string(dir.path().join("app.module.ts")).unwrap();
+  assert!(content.contains("FooModule,\n    //  anesis:module-imports"));
 }
 
 #[test]
@@ -207,7 +229,6 @@ fn inject_no_marker_prepends() {
   assert_eq!(lines[0], "line1");
   assert_eq!(lines[1], "line2");
 }
-
 
 #[test]
 fn replace_substitutes_text() {
@@ -282,7 +303,6 @@ fn replace_rollback_is_restore_file() {
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
-
 #[test]
 fn appends_to_existing_file() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -319,6 +339,24 @@ fn append_rollback_is_restore_file() {
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
+#[test]
+fn append_target_file_renders_template_variables() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("user.txt").write_str("original").unwrap();
+
+  let step = AppendStep {
+    target: Target::File {
+      file: "{{ resource_name }}.txt".into(),
+    },
+    content: "appended".into(),
+  };
+
+  execute_append(&step, dir.path(), &ctx_with("resource_name", "user")).unwrap();
+
+  dir
+    .child("user.txt")
+    .assert("original\nappended".to_string());
+}
 
 #[test]
 fn deletes_existing_file() {
@@ -330,7 +368,7 @@ fn deletes_existing_file() {
       file: "remove-me.txt".into(),
     },
   };
-  execute_delete(&step, dir.path()).unwrap();
+  execute_delete(&step, dir.path(), &empty_ctx()).unwrap();
 
   assert!(!dir.path().join("remove-me.txt").exists());
 }
@@ -345,7 +383,7 @@ fn delete_rollback_stores_original_bytes() {
       file: "file.txt".into(),
     },
   };
-  let rollbacks = execute_delete(&step, dir.path()).unwrap();
+  let rollbacks = execute_delete(&step, dir.path(), &empty_ctx()).unwrap();
 
   match &rollbacks[0] {
     Rollback::RestoreFile { original, .. } => assert_eq!(original, b"important data"),
@@ -361,10 +399,9 @@ fn delete_nonexistent_file_is_ok() {
       file: "ghost.txt".into(),
     },
   };
-  let rollbacks = execute_delete(&step, dir.path()).unwrap();
+  let rollbacks = execute_delete(&step, dir.path(), &empty_ctx()).unwrap();
   assert!(rollbacks.is_empty());
 }
-
 
 #[test]
 fn renames_file() {
@@ -425,7 +462,6 @@ fn rename_target_exists_is_err() {
   assert!(execute_rename(&step, dir.path(), &tera::Context::new()).is_err());
 }
 
-
 #[test]
 fn moves_file_to_new_directory() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -477,7 +513,6 @@ fn move_target_exists_is_err() {
   assert!(execute_move(&step, dir.path(), &tera::Context::new()).is_err());
 }
 
-
 #[test]
 fn copy_creates_new_file() {
   let addon_dir = assert_fs::TempDir::new().unwrap();
@@ -488,9 +523,10 @@ fn copy_creates_new_file() {
     src: "template.txt".into(),
     dest: "output.txt".into(),
     if_exists: IfExists::Overwrite,
+    render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path()).unwrap();
+  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
 
   let content = std::fs::read_to_string(project_dir.path().join("output.txt")).unwrap();
   assert_eq!(content, "hello");
@@ -506,9 +542,10 @@ fn copy_new_file_rollback_is_delete_created() {
     src: "src.txt".into(),
     dest: "dst.txt".into(),
     if_exists: IfExists::Overwrite,
+    render: true,
   };
 
-  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path()).unwrap();
+  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
   assert!(matches!(rollbacks[0], Rollback::DeleteCreatedFile { .. }));
 }
 
@@ -529,9 +566,10 @@ fn copy_overwrites_existing_file() {
     src: "template.txt".into(),
     dest: "output.txt".into(),
     if_exists: IfExists::Overwrite,
+    render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path()).unwrap();
+  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
 
   let content = std::fs::read_to_string(project_dir.path().join("output.txt")).unwrap();
   assert_eq!(content, "new content");
@@ -548,9 +586,10 @@ fn copy_overwrite_rollback_is_restore_file() {
     src: "src.txt".into(),
     dest: "dst.txt".into(),
     if_exists: IfExists::Overwrite,
+    render: true,
   };
 
-  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path()).unwrap();
+  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
@@ -565,13 +604,49 @@ fn copy_skip_leaves_existing_file_unchanged() {
     src: "src.txt".into(),
     dest: "dst.txt".into(),
     if_exists: IfExists::Skip,
+    render: true,
   };
 
-  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path()).unwrap();
+  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
   assert!(rollbacks.is_empty());
 
   let content = std::fs::read_to_string(project_dir.path().join("dst.txt")).unwrap();
   assert_eq!(content, "original");
+}
+
+#[test]
+fn copy_renders_template_vars_in_path_and_content() {
+  let addon_dir = assert_fs::TempDir::new().unwrap();
+  let project_dir = assert_fs::TempDir::new().unwrap();
+  addon_dir
+    .child("controller.ts")
+    .write_str("@Controller('{{ resource_name_kebab }}')\nexport class Controller {}")
+    .unwrap();
+
+  let step = CopyStep {
+    src: "controller.ts".into(),
+    dest: "src/{{ resource_name_kebab }}/{{ resource_name_kebab }}.controller.ts".into(),
+    if_exists: IfExists::Overwrite,
+    render: true,
+  };
+
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &ctx_with("resource_name_kebab", "blog-post"),
+  )
+  .unwrap();
+
+  let dest = project_dir
+    .path()
+    .join("src/blog-post/blog-post.controller.ts");
+  assert!(dest.exists());
+  let content = std::fs::read_to_string(dest).unwrap();
+  assert_eq!(
+    content,
+    "@Controller('blog-post')\nexport class Controller {}"
+  );
 }
 
 #[test]
@@ -584,12 +659,81 @@ fn copy_creates_destination_subdirectory() {
     src: "src.txt".into(),
     dest: "subdir/dst.txt".into(),
     if_exists: IfExists::Overwrite,
+    render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path()).unwrap();
+  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
   assert!(project_dir.path().join("subdir/dst.txt").exists());
 }
 
+#[test]
+fn copy_with_render_false_leaves_content_literal() {
+  let addon_dir = assert_fs::TempDir::new().unwrap();
+  let project_dir = assert_fs::TempDir::new().unwrap();
+  addon_dir
+    .child("workflow.yml")
+    .write_str("run: ${{ secrets.TOKEN }}")
+    .unwrap();
+
+  let step = CopyStep {
+    src: "workflow.yml".into(),
+    dest: "workflow.yml".into(),
+    if_exists: IfExists::Overwrite,
+    render: false,
+  };
+
+  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+
+  let content = std::fs::read_to_string(project_dir.path().join("workflow.yml")).unwrap();
+  assert_eq!(content, "run: ${{ secrets.TOKEN }}");
+}
+
+#[test]
+fn copy_binary_file_preserves_bytes() {
+  let addon_dir = assert_fs::TempDir::new().unwrap();
+  let project_dir = assert_fs::TempDir::new().unwrap();
+  let bytes: Vec<u8> = vec![0xff, 0xfe, 0x00, 0x01, 0x89, 0x50, 0x4e, 0x47];
+  addon_dir.child("image.bin").write_binary(&bytes).unwrap();
+
+  let step = CopyStep {
+    src: "image.bin".into(),
+    dest: "image.bin".into(),
+    if_exists: IfExists::Overwrite,
+    render: true,
+  };
+
+  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+
+  let written = std::fs::read(project_dir.path().join("image.bin")).unwrap();
+  assert_eq!(written, bytes);
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_preserves_executable_bit() {
+  use std::os::unix::fs::PermissionsExt;
+
+  let addon_dir = assert_fs::TempDir::new().unwrap();
+  let project_dir = assert_fs::TempDir::new().unwrap();
+  let src = addon_dir.child("run.sh");
+  src.write_str("#!/bin/sh\necho hi").unwrap();
+  std::fs::set_permissions(src.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+  let step = CopyStep {
+    src: "run.sh".into(),
+    dest: "run.sh".into(),
+    if_exists: IfExists::Overwrite,
+    render: true,
+  };
+
+  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+
+  let mode = std::fs::metadata(project_dir.path().join("run.sh"))
+    .unwrap()
+    .permissions()
+    .mode();
+  assert_eq!(mode & 0o111, 0o111);
+}
 
 #[test]
 fn render_string_renders_multiline_control_blocks() {
@@ -623,7 +767,6 @@ fn render_string_multiple_variables() {
   assert_eq!(result, "my-app");
 }
 
-
 #[test]
 fn create_path_traversal_blocked() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -634,7 +777,6 @@ fn create_path_traversal_blocked() {
   };
   assert!(execute_create(&step, dir.path(), &empty_ctx()).is_err());
 }
-
 
 #[test]
 fn inject_content_uses_template_vars() {
@@ -760,7 +902,6 @@ fn create_uses_template_var_in_path() {
   assert_eq!(content, "ENV=test\n");
 }
 
-
 #[test]
 fn append_to_file_with_trailing_newline_no_double_newline() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -781,7 +922,6 @@ fn append_to_file_with_trailing_newline_no_double_newline() {
   assert_eq!(lines[1], "line2");
 }
 
-
 #[test]
 fn packages_detects_by_lockfile_then_manifest() {
   let dir = assert_fs::TempDir::new().unwrap();
@@ -798,7 +938,6 @@ fn packages_no_manifest_is_error() {
   let dir = assert_fs::TempDir::new().unwrap();
   assert!(addon_detect_pm_for_tests(dir.path()).is_err());
 }
-
 
 #[test]
 fn run_executes_in_project_root_and_records_irreversible() {
@@ -823,4 +962,65 @@ fn run_nonzero_exit_is_error() {
   };
   let out = execute_run(&step, &std::env::temp_dir(), &empty_ctx(), true);
   assert!(out.is_err());
+}
+
+#[test]
+fn delete_target_file_renders_template_path() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("user.txt").write_str("bye").unwrap();
+
+  let step = DeleteStep {
+    target: Target::File {
+      file: "{{ resource_name }}.txt".into(),
+    },
+  };
+  execute_delete(&step, dir.path(), &ctx_with("resource_name", "user")).unwrap();
+
+  assert!(!dir.path().join("user.txt").exists());
+}
+
+#[test]
+fn replace_target_file_renders_template_path() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir
+    .child("user.ts")
+    .write_str("const PORT = 3000;")
+    .unwrap();
+
+  let step = ReplaceStep {
+    target: Target::File {
+      file: "{{ resource_name }}.ts".into(),
+    },
+    find: "3000".into(),
+    replace: "4000".into(),
+    if_not_found: IfNotFound::Error,
+  };
+  execute_replace(&step, dir.path(), &ctx_with("resource_name", "user")).unwrap();
+
+  let content = std::fs::read_to_string(dir.path().join("user.ts")).unwrap();
+  assert_eq!(content, "const PORT = 4000;");
+}
+
+#[test]
+fn delete_target_glob_renders_template_pattern() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("blog-post/a.tmp").write_str("a").unwrap();
+  dir.child("blog-post/b.tmp").write_str("b").unwrap();
+  dir.child("blog-post/keep.txt").write_str("keep").unwrap();
+
+  let step = DeleteStep {
+    target: Target::Glob {
+      glob: "{{ resource_name_kebab }}/*.tmp".into(),
+    },
+  };
+  execute_delete(
+    &step,
+    dir.path(),
+    &ctx_with("resource_name_kebab", "blog-post"),
+  )
+  .unwrap();
+
+  assert!(!dir.path().join("blog-post/a.tmp").exists());
+  assert!(!dir.path().join("blog-post/b.tmp").exists());
+  assert!(dir.path().join("blog-post/keep.txt").exists());
 }

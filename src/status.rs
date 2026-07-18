@@ -5,8 +5,6 @@ use colored::Colorize;
 
 use crate::{addons::lock::LockFile, manifest::AnesisManifest};
 
-/// Reads `anesis.json` (required — marks the project root) and `anesis.lock`
-/// (optional — created once addons are applied) from `project_root`.
 fn load(project_root: &Path) -> Result<(AnesisManifest, LockFile)> {
   let manifest_path = project_root.join("anesis.json");
   let contents = std::fs::read_to_string(&manifest_path).with_context(|| {

@@ -24,9 +24,17 @@ pub async fn publish_stack(
 ) -> Result<()> {
   let user = get_auth_user(&ctx.paths.auth)?;
   let (method, verb) = if update {
-    (ctx.client.patch(format!("{}/stack/", ctx.backend_url)), "Updating")
+    (
+      ctx.client.patch(format!("{}/stack/", ctx.backend_url)),
+      "Updating",
+    )
   } else {
-    (ctx.client.post(format!("{}/stack/publish", ctx.backend_url)), "Publishing")
+    (
+      ctx
+        .client
+        .post(format!("{}/stack/publish", ctx.backend_url)),
+      "Publishing",
+    )
   };
 
   let sp = spinner(format!("{verb} stack to registry..."));

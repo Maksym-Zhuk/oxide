@@ -7,9 +7,6 @@ use crate::addons::manifest::PackagesStep;
 
 use super::Rollback;
 
-/// The package managers we know how to drive. Detection is by lock-file (JS) then
-/// by `Cargo.toml` (Rust), so an addon's `packages` step works in whatever project
-/// it lands in without the author naming a manager.
 enum PackageManager {
   Npm,
   Bun,
@@ -29,7 +26,6 @@ impl PackageManager {
     }
   }
 
-  /// Subcommand args that precede the package specs to add production deps.
   fn add_args(&self) -> &'static [&'static str] {
     match self {
       PackageManager::Npm => &["install"],
@@ -37,7 +33,6 @@ impl PackageManager {
     }
   }
 
-  /// Flag that turns an add into a dev-dependency add.
   fn dev_flag(&self) -> &'static str {
     match self {
       PackageManager::Npm | PackageManager::Pnpm => "--save-dev",
@@ -45,8 +40,6 @@ impl PackageManager {
     }
   }
 
-  /// Manifest + lock files to snapshot so the step is reversible. Only the ones
-  /// that exist are actually snapshotted.
   fn snapshot_files(&self) -> &'static [&'static str] {
     match self {
       PackageManager::Cargo => &["Cargo.toml", "Cargo.lock"],
@@ -132,8 +125,6 @@ pub fn execute_packages(step: &PackagesStep, project_root: &Path) -> Result<Vec<
   Ok(rollbacks)
 }
 
-/// Exposes the detected package manager's program name for integration tests,
-/// without leaking the private `PackageManager` enum across the crate boundary.
 pub fn detect_pm_for_tests(root: &Path) -> Result<&'static str> {
   detect_pm(root).map(|pm| pm.program())
 }

@@ -6,8 +6,12 @@ use crate::addons::manifest::DeleteStep;
 
 use super::{Rollback, resolve_target};
 
-pub fn execute_delete(step: &DeleteStep, project_root: &Path) -> Result<Vec<Rollback>> {
-  let paths = resolve_target(&step.target, project_root)?;
+pub fn execute_delete(
+  step: &DeleteStep,
+  project_root: &Path,
+  ctx: &tera::Context,
+) -> Result<Vec<Rollback>> {
+  let paths = resolve_target(&step.target, project_root, ctx)?;
   let mut rollbacks = Vec::new();
 
   for path in paths {

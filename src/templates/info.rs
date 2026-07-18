@@ -3,15 +3,10 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
-use crate::{
-  cache::get_cached_template, context::AppContext, templates::AnesisTemplate,
-  templates::install::install_template,
-};
+use crate::{context::AppContext, templates::AnesisTemplate, templates::install::install_template};
 
-/// Prints a template's manifest (`anesis.template.json`). Reads from the local
-/// cache when the template is installed, otherwise downloads it from the
-/// registry. `--json` dumps the raw manifest. Templates have no
-/// variants/commands/steps — just the manifest fields.
+use super::cache::get_cached_template;
+
 pub async fn template_info(ctx: &AppContext, template_name: &str, json: bool) -> Result<()> {
   let cached = get_cached_template(ctx, template_name)?;
   let manifest = match cached.filter(|c| ctx.paths.templates.join(&c.path).exists()) {

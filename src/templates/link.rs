@@ -4,17 +4,13 @@ use anyhow::{Context, Result};
 use inquire::Confirm;
 
 use crate::{
-  cache::update_templates_cache,
   context::AppContext,
   templates::AnesisTemplate,
   utils::{fs::copy_dir_respecting_gitignore, validate::validate_template_name},
 };
 
-/// Validates a local directory as an Anesis template and copies it into the cache
-/// so `anesis new` can use it without publishing to the registry. The validation
-/// mirrors the server's: the directory must contain a well-formed
-/// `anesis.template.json`. Returns the template name it was cached under, or
-/// `None` if the user declined to overwrite an existing cached template.
+use super::cache::update_templates_cache;
+
 pub fn link_template(ctx: &AppContext, source: &Path, force: bool) -> Result<Option<String>> {
   let manifest_path = source.join("anesis.template.json");
   let content = std::fs::read_to_string(&manifest_path).with_context(|| {

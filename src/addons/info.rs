@@ -8,10 +8,6 @@ use super::{
   manifest::{AddonManifest, InputDef, InputType, Step, Target},
 };
 
-/// Prints an addon's manifest — description, version, variants and each
-/// command's inputs and steps. Reads from the local cache when the addon is
-/// installed, otherwise fetches it from the registry (mirrors
-/// `runner::list_addon_commands`). `--json` dumps the raw manifest.
 pub async fn addon_info(ctx: &AppContext, addon_id: &str, json: bool) -> Result<()> {
   let addon_dir = ctx.paths.addons.join(addon_id);
   let cached = super::cache::get_cached_addon(&ctx.paths.addons, addon_id)?;
@@ -110,8 +106,6 @@ fn input_line(input: &InputDef) -> String {
   format!("{}: {}{}", input.name.cyan(), ty, suffix.dimmed())
 }
 
-/// Concise one-line summary of a step (type + target/path). Kept local rather
-/// than reusing `runner::step_label` (private) to avoid widening its API.
 fn step_label(step: &Step) -> String {
   fn target(t: &Target) -> &str {
     match t {

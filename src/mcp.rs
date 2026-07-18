@@ -57,7 +57,10 @@ fn call_tool(params: Option<&Value>) -> Result<Value, (i64, String)> {
     .get("name")
     .and_then(Value::as_str)
     .ok_or((-32602, "Missing tool name".to_string()))?;
-  let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+  let args = params
+    .get("arguments")
+    .cloned()
+    .unwrap_or_else(|| json!({}));
 
   let (text, is_error) = run_tool(name, &args);
   Ok(json!({
@@ -96,7 +99,12 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
         "template" => vec!["template".into(), "info".into(), id, "--json".into()],
         "addon" => vec!["addon".into(), "info".into(), id, "--json".into()],
         "stack" => vec!["stack".into(), "info".into(), id, "--json".into()],
-        other => return (format!("Unknown kind '{other}'; use template|addon|stack"), true),
+        other => {
+          return (
+            format!("Unknown kind '{other}'; use template|addon|stack"),
+            true,
+          );
+        }
       }
     }
     "scaffold_project" => {
@@ -135,7 +143,13 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
       if project.is_empty() || stack.is_empty() {
         return ("'name' and 'stack' are required".to_string(), true);
       }
-      let mut v = vec!["new".to_string(), project, "--stack".into(), stack, "--yes".into()];
+      let mut v = vec![
+        "new".to_string(),
+        project,
+        "--stack".into(),
+        stack,
+        "--yes".into(),
+      ];
       push_inputs(&mut v, args);
       v
     }

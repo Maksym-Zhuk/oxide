@@ -1,8 +1,7 @@
-use anesis::addons::catalog::addon_pick_items;
+use anesis::addons::catalog::{addon_pick_items, fetch_addon_catalog};
 use anesis::{
   addons,
   auth::{account::print_user_info, login::login, logout::logout},
-  cache::{get_installed_templates, remove_template_from_cache},
   cli::{
     self,
     commands::{AddonCommands, Commands, StackCommands, TemplateCommands},
@@ -10,8 +9,10 @@ use anesis::{
   completions, config,
   context::AppContext,
   info::print_info,
+  stacks::registry::fetch_stack_catalog,
   templates::{
-    catalog::template_pick_items,
+    cache::{get_installed_templates, remove_template_from_cache},
+    catalog::{fetch_catalog, template_pick_items},
     generator::{extract_template, overwritten_paths},
     install::{InstallResult, install_template, record_template_use},
     link::link_template,
@@ -31,7 +32,7 @@ use anyhow::Result;
 use colored::Colorize;
 use inquire::Confirm;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
   config::init_env();
   completions::complete_env();
@@ -130,7 +131,7 @@ async fn run() -> Result<()> {
       }
       TemplateCommands::List { json } => {
         if json {
-          let templates = anesis::cache::read_installed_templates(&ctx.paths.templates)?;
+          let templates = anesis::templates::cache::read_installed_templates(&ctx.paths.templates)?;
           println!("{}", serde_json::to_string_pretty(&templates)?);
         } else {
           get_installed_templates(&ctx.paths.templates)?;
@@ -276,8 +277,15 @@ async fn run() -> Result<()> {
         org_id,
       } => {
         is_valid_github_repo_url(&stack_url)?;
-        anesis::stacks::publish::publish_stack(&ctx, &stack_url, false, visibility, credential_id, org_id)
-          .await?;
+        anesis::stacks::publish::publish_stack(
+          &ctx,
+          &stack_url,
+          false,
+          visibility,
+          credential_id,
+          org_id,
+        )
+        .await?;
       }
       StackCommands::Update {
         stack_url,
@@ -286,8 +294,15 @@ async fn run() -> Result<()> {
         org_id,
       } => {
         is_valid_github_repo_url(&stack_url)?;
-        anesis::stacks::publish::publish_stack(&ctx, &stack_url, true, visibility, credential_id, org_id)
-          .await?;
+        anesis::stacks::publish::publish_stack(
+          &ctx,
+          &stack_url,
+          true,
+          visibility,
+          credential_id,
+          org_id,
+        )
+        .await?;
       }
     },
     Commands::Use {
@@ -352,9 +367,17 @@ async fn run() -> Result<()> {
       completions::install_completions(shell)?;
     }
     Commands::Search { query, json } => {
-      let mut items: Vec<PickItem> = template_pick_items(&ctx, false).await?;
-      items.extend(addon_pick_items(&ctx, false).await?);
-      items.extend(anesis::stacks::registry::stack_pick_items(&ctx).await.unwrap_or_default());
+      let sp = spinner("Loading registry...");
+      let (templates, addons, stacks) = tokio::join!(
+        fetch_catalog(&ctx),
+        fetch_addon_catalog(&ctx),
+        fetch_stack_catalog(&ctx)
+      );
+      sp.finish_and_clear();
+
+      let mut items: Vec<PickItem> = templates?.iter().map(|t| t.to_pick_item()).collect();
+      items.extend(addons?.iter().map(|a| a.to_pick_item()));
+      items.extend(stacks.unwrap_or_default().iter().map(|s| s.to_pick_item()));
 
       if json {
         let needle = query.unwrap_or_default().to_lowercase();
@@ -444,8 +467,6 @@ async fn run() -> Result<()> {
   Ok(())
 }
 
-/// Shows the template picker and returns the chosen template name. Errors when
-/// there's nothing to pick or the user cancels (esc/ctrl-c).
 async fn choose_template(ctx: &AppContext, installed: bool, title: &'static str) -> Result<String> {
   let items = template_pick_items(ctx, installed).await?;
   if items.is_empty() {
@@ -461,8 +482,6 @@ async fn choose_template(ctx: &AppContext, installed: bool, title: &'static str)
   }
 }
 
-/// Shows the addon picker and returns the chosen addon id. Errors when there's
-/// nothing to pick or the user cancels.
 async fn choose_addon(ctx: &AppContext, installed: bool, title: &'static str) -> Result<String> {
   let items = addon_pick_items(ctx, installed).await?;
   if items.is_empty() {
@@ -478,8 +497,6 @@ async fn choose_addon(ctx: &AppContext, installed: bool, title: &'static str) ->
   }
 }
 
-/// Parses repeated `--input NAME=VALUE` pairs into a map. Errors on any pair
-/// missing an `=` so a typo fails loudly instead of being silently dropped.
 fn parse_inputs(pairs: &[String]) -> Result<std::collections::HashMap<String, String>> {
   let mut map = std::collections::HashMap::new();
   for pair in pairs {
@@ -491,10 +508,6 @@ fn parse_inputs(pairs: &[String]) -> Result<std::collections::HashMap<String, St
   Ok(map)
 }
 
-/// Scaffolds a project from a stack: renders the template, then applies each
-/// addon in order with the inputs pinned in the stack (missing inputs are still
-/// prompted unless `--yes`). A failing addon rolls back its own steps and aborts
-/// the stack with an error naming which addon failed.
 async fn apply_stack(
   ctx: &AppContext,
   project_name: &str,

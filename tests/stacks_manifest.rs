@@ -18,10 +18,15 @@ fn parses_and_defaults_command() {
 #[test]
 fn rejects_empty_template_and_addon_id() {
   let mut stack: StackManifest =
-    serde_json::from_str(r#"{"schema_version":"1","id":"s","name":"S","template":"nest"}"#).unwrap();
+    serde_json::from_str(r#"{"schema_version":"1","id":"s","name":"S","template":"nest"}"#)
+      .unwrap();
   stack.template = " ".into();
   assert!(validate(&stack).is_err());
   stack.template = "nest".into();
-  stack.addons.push(StackAddon { id: "".into(), command: "install".into(), inputs: HashMap::new() });
+  stack.addons.push(StackAddon {
+    id: "".into(),
+    command: "install".into(),
+    inputs: HashMap::new(),
+  });
   assert!(validate(&stack).is_err());
 }

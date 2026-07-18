@@ -4,9 +4,6 @@ use colored::Colorize;
 
 use crate::{auth::token::get_auth_user, context::AppContext};
 
-/// Prints a `doctor`-style summary: CLI version, backend, local data paths,
-/// login status and how many templates/addons are cached. Local-only — never
-/// touches the network, so it works offline.
 pub fn print_info(ctx: &AppContext) {
   println!(
     "{} {}",
@@ -52,7 +49,6 @@ pub fn print_info(ctx: &AppContext) {
   );
 }
 
-/// Same data as `print_info`, as a JSON value for `anesis info --json`.
 pub fn info_json(ctx: &AppContext) -> serde_json::Value {
   let user = get_auth_user(&ctx.paths.auth).ok();
   serde_json::json!({
@@ -77,9 +73,6 @@ fn print_path(label: &str, path: &Path) {
   println!("  {:<16} {}", format!("{label}:").dimmed(), path.display());
 }
 
-/// Best-effort count of `field`'s array length in a cache JSON file. Any
-/// error (missing file, malformed JSON) reads as 0 rather than failing the
-/// whole command.
 fn count_array(path: &Path, field: &str) -> usize {
   fs::read_to_string(path)
     .ok()

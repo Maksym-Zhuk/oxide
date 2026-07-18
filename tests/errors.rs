@@ -2,7 +2,6 @@ use std::fmt;
 
 use anesis::utils::errors::AnesisError;
 
-
 #[test]
 fn not_logged_in_display() {
   let err = AnesisError::NotLoggedIn;
@@ -45,7 +44,6 @@ fn network_timeout_display() {
   assert_eq!(err.to_string(), "The request timed out.");
 }
 
-
 #[test]
 fn anesis_error_wrapped_in_anyhow_is_downcastable() {
   let err: anyhow::Error = AnesisError::NotLoggedIn.into();
@@ -64,7 +62,6 @@ fn anesis_error_survives_anyhow_context_chain() {
     "AnesisError should be discoverable in the error chain"
   );
 }
-
 
 #[test]
 fn anesis_error_implements_debug() {

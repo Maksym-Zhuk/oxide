@@ -9,9 +9,6 @@ use crate::addons::manifest::RunStep;
 
 use super::Rollback;
 
-/// Runs an arbitrary shell command in the project root. Because this executes
-/// unsandboxed code, the exact command is always shown and an explicit yes is
-/// required before it runs (bypassed by `--yes`/non-interactive).
 pub fn execute_run(
   step: &RunStep,
   project_root: &Path,

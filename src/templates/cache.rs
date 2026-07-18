@@ -31,8 +31,6 @@ pub struct CachedTemplate {
 }
 
 impl CachedTemplate {
-  /// Interactive-picker row for a locally cached template. No description is
-  /// stored locally, so the picker falls back to the name for the body line.
   pub fn to_pick_item(&self) -> PickItem {
     let meta = if self.version.is_empty() {
       String::new()
@@ -50,7 +48,6 @@ impl CachedTemplate {
   }
 }
 
-/// Reads the locally cached templates (the `--installed` picker source).
 pub fn read_installed_templates(template_path: &Path) -> Result<Vec<CachedTemplate>> {
   let templates_json = template_path.join("anesis-templates.json");
   if !templates_json.exists() {

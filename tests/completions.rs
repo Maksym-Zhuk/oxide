@@ -6,7 +6,6 @@ use anesis::completions::{
 };
 use assert_fs::prelude::*;
 
-
 #[test]
 fn upsert_managed_block_inserts_into_empty() {
   let result = upsert_managed_block("", "# start\ncode\n# end", "# start", "# end");
@@ -27,7 +26,6 @@ fn upsert_managed_block_appends_when_absent() {
   assert_eq!(result, "existing content\n\n# start\ncode\n# end\n");
 }
 
-
 #[test]
 fn powershell_profile_paths_in_returns_both_profiles() {
   let docs = PathBuf::from("/home/user/Documents");
@@ -37,13 +35,11 @@ fn powershell_profile_paths_in_returns_both_profiles() {
   assert!(paths[1].ends_with("WindowsPowerShell/Microsoft.PowerShell_profile.ps1"));
 }
 
-
 #[test]
 fn template_candidates_empty_when_no_cache() {
   let candidates = template_candidates(None);
   assert!(candidates.is_empty());
 }
-
 
 #[test]
 fn addon_candidates_empty_when_no_dir() {
@@ -51,12 +47,10 @@ fn addon_candidates_empty_when_no_dir() {
   assert!(candidates.is_empty());
 }
 
-
 #[test]
 fn command_for_paths_builds_without_panic() {
   let _ = command_for_paths(None, None);
 }
-
 
 #[test]
 fn zsh_fpath_snippet_contains_dir_and_compinit() {
@@ -66,7 +60,6 @@ fn zsh_fpath_snippet_contains_dir_and_compinit() {
   assert!(snippet.starts_with("# anesis completions start"));
   assert!(snippet.ends_with("# anesis completions end"));
 }
-
 
 #[test]
 fn upsert_zsh_config_writes_new_file() {
@@ -116,7 +109,6 @@ fn upsert_zsh_config_preserves_existing_content() {
   assert!(content.contains("fpath=(/home/user/.zfunc $fpath)"));
 }
 
-
 #[test]
 fn upsert_managed_block_normalises_crlf_line_endings() {
   let original = "line1\r\n\r\n# start\r\nold\r\n# end\r\nline2\r\n";
@@ -139,7 +131,6 @@ fn upsert_managed_block_appends_after_content_without_trailing_newline() {
   assert!(result.contains("content without newline"));
   assert!(result.contains("block"));
 }
-
 
 #[test]
 fn template_candidates_with_cache_returns_names() {
@@ -175,7 +166,6 @@ fn template_candidates_empty_when_cache_is_corrupt() {
   let candidates = template_candidates(Some(dir.path()));
   assert!(candidates.is_empty());
 }
-
 
 #[test]
 fn addon_candidates_with_cache_returns_ids() {

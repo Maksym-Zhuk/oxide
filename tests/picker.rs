@@ -12,11 +12,11 @@ fn tokens_match_across_separators() {
     "react-vite-ts",
     &tokenize_for_tests("ts react")
   ));
-  assert!(smart_match_for_tests("anything", &tokenize_for_tests(""))); // empty query matches all
+  assert!(smart_match_for_tests("anything", &tokenize_for_tests("")));
   assert!(!smart_match_for_tests(
     "react-vite-ts",
     &tokenize_for_tests("vue")
-  )); // missing token fails
+  ));
 }
 
 #[test]
