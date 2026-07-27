@@ -14,33 +14,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout anesis-cli (registry-lint tool)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: anesis-dev/anesis-cli
           path: cli
 
       - name: Checkout this repo (${{ inputs.caller }})
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: registry/${{ inputs.caller }}
 
       - name: Checkout templates
         if: inputs.caller != 'templates'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: anesis-dev/templates
           path: registry/templates
 
       - name: Checkout addons
         if: inputs.caller != 'addons'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: anesis-dev/addons
           path: registry/addons
 
       - name: Checkout stacks
         if: inputs.caller != 'stacks'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: anesis-dev/stacks
           path: registry/stacks

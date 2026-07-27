@@ -23,7 +23,7 @@ jobs:
                 os: [ubuntu-latest, macos-latest, windows-latest]
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -60,7 +60,7 @@ jobs:
         if: github.event_name != 'schedule'
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -90,7 +90,7 @@ jobs:
                 working-directory: tools/registry-lint
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -139,7 +139,7 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Install cargo-audit and cargo-deny
               uses: taiki-e/install-action@v2

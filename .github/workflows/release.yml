@@ -13,7 +13,7 @@ jobs:
         name: Check versions
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Verify versions match tag
               run: |
@@ -58,7 +58,7 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -145,7 +145,7 @@ jobs:
         permissions:
             contents: write
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -168,7 +168,7 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ github.repository_owner == 'anesis-dev' }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Check for the packaging token
               id: gate
@@ -226,7 +226,7 @@ jobs:
         needs: checksums
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -243,7 +243,7 @@ jobs:
             id-token: write
             contents: read
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - uses: actions/setup-node@v4
               with:

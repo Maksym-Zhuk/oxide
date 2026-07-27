@@ -53,12 +53,12 @@ jobs:
 
         steps:
             - name: Checkout anesis-cli
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
               with:
                   path: cli
 
             - name: Checkout anesis-server
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
               with:
                   repository: anesis-dev/anesis-server
                   token: ${{ secrets.SERVER_REPO_TOKEN }}
