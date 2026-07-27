@@ -415,6 +415,7 @@ fn quiet_keeps_command_output_and_exit_code() {
   cmd()
     .env("HOME", home.path())
     .env("USERPROFILE", home.path())
+    .env("ANESIS_HOME", home.path())
     .args(["--quiet", "info"])
     .assert()
     .success()

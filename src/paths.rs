@@ -15,8 +15,10 @@ pub struct AnesisPaths {
 
 impl AnesisPaths {
   pub fn new() -> Result<Self> {
-    let home_dir =
-      dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+    let home_dir = match std::env::var_os("ANESIS_HOME") {
+      Some(dir) => PathBuf::from(dir),
+      None => dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?,
+    };
 
     let anesis_home = home_dir.join(".anesis");
 

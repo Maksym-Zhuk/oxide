@@ -22,6 +22,7 @@ impl Cli {
       .current_dir(self.workdir.path())
       .env("HOME", self.home.path())
       .env("USERPROFILE", self.home.path())
+      .env("ANESIS_HOME", self.home.path())
       .env("ANESIS_NO_TELEMETRY", "1")
       .env_remove("ANESIS_TOKEN")
       .env_remove("ANESIS_BACKEND_URL")
