@@ -7,7 +7,7 @@ pub mod link;
 pub mod lock;
 pub mod manifest;
 pub mod publish;
+pub mod republish;
 pub mod runner;
 pub mod steps;
 pub mod test;
-pub mod update;

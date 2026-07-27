@@ -4,7 +4,10 @@ use anyhow::Result;
 use inquire::Confirm;
 
 use crate::{
-  auth::{server::run_local_auth_server, token::get_auth_user},
+  auth::{
+    server::{bind_local_auth_server, serve_local_auth_server},
+    token::get_auth_user,
+  },
   utils::ui::spinner,
 };
 
@@ -23,7 +26,14 @@ pub async fn login(auth_path: &Path, backend_url: &str, frontend_url: &str) -> R
   }
 
   let state = generate_state_token();
-  let login_url = format!("{}/auth/cli-login?state={}", backend_url, state);
+
+  let listener = bind_local_auth_server(state.clone(), frontend_url).await?;
+  let login_url = format!(
+    "{}/auth/cli-login?state={}&port={}",
+    backend_url,
+    state,
+    listener.port()
+  );
   if open::that(&login_url).is_err() {
     println!(
       "Could not open your browser automatically. Open this URL to log in:\n  {}",
@@ -34,7 +44,7 @@ pub async fn login(auth_path: &Path, backend_url: &str, frontend_url: &str) -> R
     println!("  {}", login_url);
   }
   let sp = spinner("Waiting for browser authorization...");
-  let user = run_local_auth_server(state, frontend_url)
+  let user = serve_local_auth_server(listener)
     .await
     .inspect_err(|_| sp.finish_and_clear())?;
   sp.finish_and_clear();

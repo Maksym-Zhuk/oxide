@@ -11,8 +11,26 @@ use std::{
 };
 
 pub fn init_env() {
-  env_logger::init();
-  dotenvy::dotenv().ok();
+  #[cfg(debug_assertions)]
+  {
+    dotenvy::dotenv().ok();
+  }
+}
+
+pub fn init_logging(verbose: u8) {
+  let mut builder = env_logger::Builder::from_env(env_logger::Env::default());
+
+  if verbose > 0 && std::env::var("RUST_LOG").is_err() {
+    let level = if verbose == 1 {
+      log::LevelFilter::Debug
+    } else {
+      log::LevelFilter::Trace
+    };
+    builder.filter_module("anesis", level);
+  }
+
+  builder.target(env_logger::Target::Stderr);
+  builder.init();
 }
 
 pub fn build_app_context() -> Result<AppContext> {
@@ -26,7 +44,7 @@ pub fn build_app_context() -> Result<AppContext> {
 
   let cleanup_state: CleanupState = Arc::new(Mutex::new(None));
 
-  setup_ctrlc_handler(cleanup_state.clone(), anesis_paths.templates.clone())?;
+  setup_ctrlc_handler(cleanup_state.clone())?;
 
   Ok(AppContext::new(anesis_paths, client, cleanup_state))
 }

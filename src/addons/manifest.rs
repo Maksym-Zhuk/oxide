@@ -1,5 +1,42 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Author {
+  Structured { name: String, github: String },
+  Name(String),
+}
+
+impl Author {
+  pub fn github(&self) -> Option<&str> {
+    match self {
+      Author::Structured { github, .. } => Some(github),
+      Author::Name(_) => None,
+    }
+  }
+}
+
+impl From<&str> for Author {
+  fn from(name: &str) -> Self {
+    Author::Name(name.to_string())
+  }
+}
+
+impl From<String> for Author {
+  fn from(name: String) -> Self {
+    Author::Name(name)
+  }
+}
+
+impl std::fmt::Display for Author {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Author::Structured { name, .. } => write!(f, "{name}"),
+      Author::Name(name) => write!(f, "{name}"),
+    }
+  }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AddonManifest {
   pub schema_version: String,
@@ -7,7 +44,7 @@ pub struct AddonManifest {
   pub name: String,
   pub version: String,
   pub description: String,
-  pub author: String,
+  pub author: Author,
   #[serde(default)]
   pub requires: Vec<String>,
   #[serde(default)]

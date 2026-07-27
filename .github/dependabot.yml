@@ -1,0 +1,41 @@
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # Patch and minor bumps arrive as one PR instead of a dozen; a major bump
+    # stays on its own so it gets read properly.
+    groups:
+      cargo-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+
+  # A second crate lives here and is what every registry repository's CI runs.
+  - package-ecosystem: cargo
+    directory: /tools/registry-lint
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(deps)"
+
+  # The npm wrapper package that fetches the prebuilt binary.
+  - package-ecosystem: npm
+    directory: /npm
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"

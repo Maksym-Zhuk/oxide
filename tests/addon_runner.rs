@@ -1,6 +1,585 @@
 mod common;
 
+use anesis::addons::lock::LockFile;
+use anesis::addons::runner::{run_addon_command, undo_addon};
+use anesis::context::{AppContext, CleanupState};
+use anesis::paths::AnesisPaths;
+use assert_fs::TempDir;
+use assert_fs::prelude::*;
 use common::{is_newer_for_tests, rerun_prompt_message_for_tests};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+struct Fixture {
+  home: TempDir,
+  project: TempDir,
+}
+
+impl Fixture {
+  fn new() -> Self {
+    Self {
+      home: TempDir::new().unwrap(),
+      project: TempDir::new().unwrap(),
+    }
+  }
+
+  fn paths(&self) -> AnesisPaths {
+    let root = self.home.path().join(".anesis");
+    AnesisPaths {
+      home: root.clone(),
+      version_check: root.join("version_check.json"),
+      cache: root.join("cache"),
+      templates: root.join("cache").join("templates"),
+      auth: root.join("auth.json"),
+      addons: root.join("cache").join("addons"),
+      addons_index: root.join("cache").join("addons").join("anesis-addons.json"),
+      stacks: root.join("cache").join("stacks"),
+    }
+  }
+
+  fn ctx(&self) -> AppContext {
+    let paths = self.paths();
+    paths.ensure_directories().unwrap();
+    AppContext {
+      paths,
+      client: reqwest::Client::new(),
+      cleanup_state: Arc::new(Mutex::new(None)) as CleanupState,
+      backend_url: "http://127.0.0.1:1".to_string(),
+      frontend_url: "http://127.0.0.1:1".to_string(),
+      telemetry: false,
+      allow_run: false,
+    }
+  }
+
+  fn install_addon(&self, id: &str, manifest: serde_json::Value) {
+    let addons = self.home.child(".anesis/cache/addons");
+    addons
+      .child(format!("{id}/anesis.addon.json"))
+      .write_str(&serde_json::to_string_pretty(&manifest).unwrap())
+      .unwrap();
+
+    let version = manifest["version"].as_str().unwrap_or("0.0.0");
+    addons
+      .child("anesis-addons.json")
+      .write_str(&format!(
+        r#"{{
+  "lastUpdated": "2026-01-01T00:00:00Z",
+  "addons": [
+    {{
+      "id": "{id}",
+      "name": "{id}",
+      "version": "{version}",
+      "path": "{id}",
+      "commit_sha": "deadbeef",
+      "repo_url": "https://github.com/anesis-dev/addons"
+    }}
+  ]
+}}"#
+      ))
+      .unwrap();
+  }
+
+  fn seed_project(&self) {
+    self
+      .project
+      .child("anesis.json")
+      .write_str(r#"{"template_name":"fixture","template_sha":"abc123","addons":[]}"#)
+      .unwrap();
+  }
+
+  fn lock(&self) -> LockFile {
+    LockFile::load(self.project.path()).unwrap()
+  }
+}
+
+fn reversible_addon(version: &str) -> serde_json::Value {
+  serde_json::json!({
+    "schema_version": "1",
+    "id": "fixture-addon",
+    "name": "Fixture Addon",
+    "version": version,
+    "description": "Test fixture",
+    "author": "anesis",
+    "requires": [],
+    "inputs": [],
+    "detect": [],
+    "variants": [{
+      "when": null,
+      "commands": [{
+        "name": "install",
+        "description": "",
+        "once": true,
+        "requires_commands": [],
+        "inputs": [],
+        "steps": [
+          { "type": "create", "path": "generated.txt", "content": "hello\n", "if_exists": "overwrite" },
+          { "type": "append", "target": { "type": "file", "file": "existing.txt" }, "content": "appended\n" }
+        ]
+      }]
+    }]
+  })
+}
+
+#[tokio::test]
+async fn applying_a_command_writes_files_and_records_the_lock_entry() {
+  let fx = Fixture::new();
+  fx.seed_project();
+  fx.install_addon("fixture-addon", reversible_addon("1.0.0"));
+  fx.project
+    .child("existing.txt")
+    .write_str("base\n")
+    .unwrap();
+
+  run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "install",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap();
+
+  fx.project.child("generated.txt").assert("hello\n");
+  fx.project.child("existing.txt").assert("base\nappended\n");
+
+  let lock = fx.lock();
+  assert_eq!(lock.addons.len(), 1);
+  assert_eq!(lock.addons[0].id, "fixture-addon");
+  assert_eq!(lock.addons[0].version, "1.0.0");
+  assert_eq!(lock.addons[0].commands_executed, vec!["install"]);
+  assert!(
+    !lock.addons[0].journal.is_empty(),
+    "the rollback journal must be persisted, or `anesis undo` has nothing to work with"
+  );
+}
+
+#[tokio::test]
+async fn a_dry_run_changes_nothing() {
+  let fx = Fixture::new();
+  fx.seed_project();
+  fx.install_addon("fixture-addon", reversible_addon("1.0.0"));
+  fx.project
+    .child("existing.txt")
+    .write_str("base\n")
+    .unwrap();
+
+  run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "install",
+    fx.project.path(),
+    &HashMap::new(),
+    false,
+    true,
+  )
+  .await
+  .unwrap();
+
+  assert!(!fx.project.path().join("generated.txt").exists());
+  fx.project.child("existing.txt").assert("base\n");
+  assert!(
+    fx.lock().addons.is_empty(),
+    "a dry run must not touch anesis.lock"
+  );
+}
+
+#[tokio::test]
+async fn an_unknown_command_is_rejected() {
+  let fx = Fixture::new();
+  fx.seed_project();
+  fx.install_addon("fixture-addon", reversible_addon("1.0.0"));
+
+  let err = run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "nope",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap_err();
+
+  assert!(err.to_string().contains("nope"), "{err}");
+}
+
+#[tokio::test]
+async fn a_missing_required_addon_blocks_the_apply() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let mut manifest = reversible_addon("1.0.0");
+  manifest["requires"] = serde_json::json!(["some-base-addon"]);
+  fx.install_addon("fixture-addon", manifest);
+
+  let err = run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "install",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap_err();
+
+  assert!(err.to_string().contains("some-base-addon"), "{err}");
+  assert!(!fx.project.path().join("generated.txt").exists());
+}
+
+#[tokio::test]
+async fn a_command_that_requires_another_is_blocked_until_it_has_run() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let mut manifest = reversible_addon("1.0.0");
+  manifest["variants"][0]["commands"]
+    .as_array_mut()
+    .unwrap()
+    .push(serde_json::json!({
+      "name": "configure",
+      "description": "",
+      "once": false,
+      "requires_commands": ["install"],
+      "inputs": [],
+      "steps": [
+        { "type": "create", "path": "configured.txt", "content": "ok\n", "if_exists": "overwrite" }
+      ]
+    }));
+  fx.install_addon("fixture-addon", manifest);
+  fx.project
+    .child("existing.txt")
+    .write_str("base\n")
+    .unwrap();
+
+  let err = run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "configure",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap_err();
+  assert!(err.to_string().contains("install"), "{err}");
+
+  run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "install",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap();
+  run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "configure",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap();
+
+  fx.project.child("configured.txt").assert("ok\n");
+}
+
+#[tokio::test]
+async fn a_once_command_is_skipped_on_re_run_at_the_same_version() {
+  let fx = Fixture::new();
+  fx.seed_project();
+  fx.install_addon("fixture-addon", reversible_addon("1.0.0"));
+  fx.project
+    .child("existing.txt")
+    .write_str("base\n")
+    .unwrap();
+
+  let ctx = fx.ctx();
+  for _ in 0..2 {
+    run_addon_command(
+      &ctx,
+      "fixture-addon",
+      "install",
+      fx.project.path(),
+      &HashMap::new(),
+      true,
+      false,
+    )
+    .await
+    .unwrap();
+  }
+
+  fx.project.child("existing.txt").assert("base\nappended\n");
+  assert_eq!(fx.lock().addons.len(), 1);
+}
+
+#[tokio::test]
+async fn a_failing_step_rolls_back_the_earlier_ones() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let manifest = serde_json::json!({
+    "schema_version": "1",
+    "id": "failing-addon",
+    "name": "Failing Addon",
+    "version": "1.0.0",
+    "description": "",
+    "author": "anesis",
+    "requires": [],
+    "inputs": [],
+    "detect": [],
+    "variants": [{
+      "when": null,
+      "commands": [{
+        "name": "install",
+        "description": "",
+        "once": true,
+        "requires_commands": [],
+        "inputs": [],
+        "steps": [
+          { "type": "create", "path": "first.txt", "content": "one\n", "if_exists": "overwrite" },
+          { "type": "create", "path": "second.txt", "content": "two\n", "if_exists": "overwrite" },
+          { "type": "append", "target": { "type": "file", "file": "does-not-exist.txt" }, "content": "boom\n" }
+        ]
+      }]
+    }]
+  });
+  fx.install_addon("failing-addon", manifest);
+
+  let err = run_addon_command(
+    &fx.ctx(),
+    "failing-addon",
+    "install",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap_err();
+  assert!(err.to_string().contains("step 3"), "{err}");
+
+  assert!(
+    !fx.project.path().join("first.txt").exists(),
+    "step 1 must have been rolled back"
+  );
+  assert!(
+    !fx.project.path().join("second.txt").exists(),
+    "step 2 must have been rolled back"
+  );
+  assert!(
+    fx.lock().addons.is_empty(),
+    "a failed apply must not leave a lock entry"
+  );
+}
+
+#[tokio::test]
+async fn undo_reverses_every_step_and_clears_the_lock() {
+  let fx = Fixture::new();
+  fx.seed_project();
+  fx.install_addon("fixture-addon", reversible_addon("1.0.0"));
+  fx.project
+    .child("existing.txt")
+    .write_str("base\n")
+    .unwrap();
+
+  run_addon_command(
+    &fx.ctx(),
+    "fixture-addon",
+    "install",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap();
+
+  undo_addon("fixture-addon", fx.project.path(), true).unwrap();
+
+  assert!(
+    !fx.project.path().join("generated.txt").exists(),
+    "a created file must be removed"
+  );
+  fx.project.child("existing.txt").assert("base\n");
+  assert!(
+    fx.lock().addons.is_empty(),
+    "the lock entry must be gone after undo"
+  );
+}
+
+#[tokio::test]
+async fn undo_of_an_unapplied_addon_is_an_error() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let err = undo_addon("never-applied", fx.project.path(), true).unwrap_err();
+  assert!(err.to_string().contains("never-applied"), "{err}");
+}
+
+#[tokio::test]
+async fn undo_reverses_every_command_that_was_applied() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let mut manifest = reversible_addon("1.0.0");
+  manifest["variants"][0]["commands"]
+    .as_array_mut()
+    .unwrap()
+    .push(serde_json::json!({
+      "name": "extra",
+      "description": "",
+      "once": false,
+      "requires_commands": [],
+      "inputs": [],
+      "steps": [
+        { "type": "create", "path": "extra.txt", "content": "extra\n", "if_exists": "overwrite" }
+      ]
+    }));
+  fx.install_addon("fixture-addon", manifest);
+  fx.project
+    .child("existing.txt")
+    .write_str("base\n")
+    .unwrap();
+
+  let ctx = fx.ctx();
+  for command in ["install", "extra"] {
+    run_addon_command(
+      &ctx,
+      "fixture-addon",
+      command,
+      fx.project.path(),
+      &HashMap::new(),
+      true,
+      false,
+    )
+    .await
+    .unwrap();
+  }
+
+  undo_addon("fixture-addon", fx.project.path(), true).unwrap();
+
+  assert!(!fx.project.path().join("generated.txt").exists());
+  assert!(!fx.project.path().join("extra.txt").exists());
+  fx.project.child("existing.txt").assert("base\n");
+}
+
+#[tokio::test]
+async fn preset_inputs_are_rendered_into_steps() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let manifest = serde_json::json!({
+    "schema_version": "1",
+    "id": "input-addon",
+    "name": "Input Addon",
+    "version": "1.0.0",
+    "description": "",
+    "author": "anesis",
+    "requires": [],
+    "inputs": [
+      { "name": "service_name", "type": "text", "description": "Service name", "default": "svc", "required": false, "options": [] }
+    ],
+    "detect": [],
+    "variants": [{
+      "when": null,
+      "commands": [{
+        "name": "install",
+        "description": "",
+        "once": true,
+        "requires_commands": [],
+        "inputs": [],
+        "steps": [
+          {
+            "type": "create",
+            "path": "{{ service_name }}.txt",
+            "content": "{{ service_name_pascal }}\n",
+            "if_exists": "overwrite"
+          }
+        ]
+      }]
+    }]
+  });
+  fx.install_addon("input-addon", manifest);
+
+  let mut presets = HashMap::new();
+  presets.insert("service_name".to_string(), "billing-api".to_string());
+
+  run_addon_command(
+    &fx.ctx(),
+    "input-addon",
+    "install",
+    fx.project.path(),
+    &presets,
+    true,
+    false,
+  )
+  .await
+  .unwrap();
+
+  fx.project.child("billing-api.txt").assert("BillingApi\n");
+}
+
+#[tokio::test]
+async fn a_required_input_with_no_value_fails_non_interactively() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let manifest = serde_json::json!({
+    "schema_version": "1",
+    "id": "input-addon",
+    "name": "Input Addon",
+    "version": "1.0.0",
+    "description": "",
+    "author": "anesis",
+    "requires": [],
+    "inputs": [
+      { "name": "api_key", "type": "text", "description": "API key", "default": null, "required": true, "options": [] }
+    ],
+    "detect": [],
+    "variants": [{
+      "when": null,
+      "commands": [{
+        "name": "install",
+        "description": "",
+        "once": true,
+        "requires_commands": [],
+        "inputs": [],
+        "steps": [
+          { "type": "create", "path": "out.txt", "content": "{{ api_key }}\n", "if_exists": "overwrite" }
+        ]
+      }]
+    }]
+  });
+  fx.install_addon("input-addon", manifest);
+
+  let err = run_addon_command(
+    &fx.ctx(),
+    "input-addon",
+    "install",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap_err();
+
+  assert!(err.to_string().contains("api_key"), "{err}");
+  assert!(!fx.project.path().join("out.txt").exists());
+}
 
 #[test]
 fn is_newer_compares_semver_not_strings() {

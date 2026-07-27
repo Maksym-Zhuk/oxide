@@ -1,0 +1,64 @@
+name: Registry Lint (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      caller:
+        description: "Which registry repo triggered this: templates | addons | stacks"
+        required: true
+        type: string
+
+jobs:
+  lint:
+    name: Validate registry manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout anesis-cli (registry-lint tool)
+        uses: actions/checkout@v4
+        with:
+          repository: anesis-dev/anesis-cli
+          path: cli
+
+      - name: Checkout this repo (${{ inputs.caller }})
+        uses: actions/checkout@v4
+        with:
+          path: registry/${{ inputs.caller }}
+
+      - name: Checkout templates
+        if: inputs.caller != 'templates'
+        uses: actions/checkout@v4
+        with:
+          repository: anesis-dev/templates
+          path: registry/templates
+
+      - name: Checkout addons
+        if: inputs.caller != 'addons'
+        uses: actions/checkout@v4
+        with:
+          repository: anesis-dev/addons
+          path: registry/addons
+
+      - name: Checkout stacks
+        if: inputs.caller != 'stacks'
+        uses: actions/checkout@v4
+        with:
+          repository: anesis-dev/stacks
+          path: registry/stacks
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli/tools/registry-lint
+
+      - name: Build registry-lint
+        run: cargo build --release --locked --manifest-path cli/tools/registry-lint/Cargo.toml
+
+      - name: Lint registry
+        run: |
+          ./cli/tools/registry-lint/target/release/registry-lint \
+            registry/templates \
+            registry/addons \
+            registry/stacks

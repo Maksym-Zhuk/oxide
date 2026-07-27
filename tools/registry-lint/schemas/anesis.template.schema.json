@@ -1,0 +1,149 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://anesis-server.onrender.com/schema/anesis.template.schema.json",
+	"title": "Anesis Template Configuration",
+	"description": "Strict validation schema for Anesis CLI templates",
+	"type": "object",
+	"additionalProperties": false,
+
+	"required": [
+		"name",
+		"version",
+		"anesisVersion",
+		"author",
+		"repository",
+		"specialization",
+		"scope",
+		"technologies",
+		"languages",
+		"type",
+		"metadata"
+	],
+
+	"properties": {
+		"$schema": {
+			"type": "string",
+			"format": "uri"
+		},
+
+		"name": {
+			"type": "string",
+			"pattern": "^[a-z0-9-]+$",
+			"minLength": 2,
+			"maxLength": 40
+		},
+
+		"version": {
+			"type": "string",
+			"pattern": "^\\d+\\.\\d+\\.\\d+$"
+		},
+
+		"anesisVersion": {
+			"type": "string",
+			"pattern": "^(>=|<=|>|<|\\^|~)?\\d+\\.\\d+\\.\\d+$"
+		},
+
+		"author": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["name", "github"],
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 2,
+					"maxLength": 80
+				},
+				"github": {
+					"type": "string",
+					"pattern": "^[a-zA-Z0-9-]+$"
+				}
+			}
+		},
+
+		"repository": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["type", "url", "release"],
+			"properties": {
+				"type": {
+					"type": "string",
+					"const": "github"
+				},
+				"url": {
+					"type": "string",
+					"pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/.*)?$"
+				},
+				"release": {
+					"type": "string",
+					"pattern": "^v\\d+\\.\\d+\\.\\d+$"
+				}
+			}
+		},
+
+		"specialization": {
+			"type": "string",
+			"enum": ["frontend", "backend", "fullstack"]
+		},
+
+		"scope": {
+			"type": "string",
+			"enum": ["web", "cli", "desktop", "mobile"]
+		},
+
+		"technologies": {
+			"type": "array",
+			"minItems": 1,
+			"uniqueItems": true,
+			"items": {
+				"type": "string"
+			}
+		},
+
+		"languages": {
+			"type": "array",
+			"minItems": 1,
+			"uniqueItems": true,
+			"items": {
+				"type": "string",
+				"enum": ["typescript", "javascript", "rust", "go", "python"]
+			}
+		},
+
+		"type": {
+			"type": "string",
+			"enum": ["base"]
+		},
+
+		"buildTool": {
+			"type": "string"
+		},
+
+		"metadata": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["displayName", "description", "tags"],
+			"properties": {
+				"displayName": {
+					"type": "string",
+					"minLength": 2,
+					"maxLength": 60
+				},
+				"description": {
+					"type": "string",
+					"minLength": 10,
+					"maxLength": 200
+				},
+				"tags": {
+					"type": "array",
+					"minItems": 2,
+					"maxItems": 10,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"pattern": "^[a-z0-9-]+$"
+					}
+				}
+			}
+		}
+	}
+}

@@ -7,13 +7,16 @@ use serde::Deserialize;
 
 use crate::{
   auth::token::get_auth_user,
-  context::AppContext,
+  context::{AppContext, CleanupTask},
   utils::{archive::download_and_extract, errors::classify_reqwest_error, ui::spinner},
 };
 
 use super::cache::{CachedTemplate, get_cached_template, update_templates_cache};
 
 pub async fn record_template_use(ctx: &AppContext, template_name: &str) {
+  if !ctx.telemetry {
+    return;
+  }
   let Ok(user) = get_auth_user(&ctx.paths.auth) else {
     return;
   };
@@ -174,7 +177,11 @@ pub async fn install_template(ctx: &AppContext, template_name: &str) -> Result<I
 
   {
     let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
-    *guard = Some(dest.clone());
+    *guard = Some(CleanupTask::PartialDownload {
+      path: dest.clone(),
+      prune_root: ctx.paths.templates.clone(),
+      label: "template",
+    });
   }
 
   if install_state == InstallState::Update && dest.exists() {

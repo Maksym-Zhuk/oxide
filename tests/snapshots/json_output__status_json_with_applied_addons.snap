@@ -1,0 +1,29 @@
+---
+source: tests/json_output.rs
+expression: "cli.json(&[\"status\", \"--json\"])"
+---
+{
+  "addons": [
+    {
+      "commands_executed": [
+        "install",
+        "generate"
+      ],
+      "id": "nest-prisma-v7",
+      "variant": "nest",
+      "version": "1.2.0"
+    },
+    {
+      "commands_executed": [
+        "install"
+      ],
+      "id": "docker-compose",
+      "variant": "universal",
+      "version": "0.4.1"
+    }
+  ],
+  "template": {
+    "name": "nest-express",
+    "sha": "89abcdef0123456789abcdef0123456789abcdef"
+  }
+}

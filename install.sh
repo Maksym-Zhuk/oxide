@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="anesis"
-REPO="anesis-dev/anesis"
+REPO="anesis-dev/anesis-cli"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
@@ -18,7 +18,7 @@ case "$ARCH" in
     *)          echo "Unsupported architecture: $ARCH"; exit 1;;
 esac
 
-LATEST_VERSION=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+LATEST_VERSION=$(curl -sSL https://api.github.com/repos/$REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
 if [ -z "$LATEST_VERSION" ]; then
     echo "Failed to fetch latest version"
@@ -27,13 +27,44 @@ fi
 
 echo "Installing $APP_NAME $LATEST_VERSION..."
 
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_VERSION/${APP_NAME}-${OS}-${ARCH}.tar.gz"
+ASSET="${APP_NAME}-${OS}-${ARCH}.tar.gz"
+RELEASE_BASE_URL="https://github.com/$REPO/releases/download/$LATEST_VERSION"
+DOWNLOAD_URL="$RELEASE_BASE_URL/$ASSET"
 
 TMP_DIR=$(mktemp -d)
 cd "$TMP_DIR"
 
 echo "Downloading from $DOWNLOAD_URL..."
-curl -sL "$DOWNLOAD_URL" | tar xz
+curl -fsSL -o "$ASSET" "$DOWNLOAD_URL"
+
+if command -v sha256sum >/dev/null 2>&1; then
+    sha256_of() { sha256sum "$1" | cut -d' ' -f1; }
+elif command -v shasum >/dev/null 2>&1; then
+    sha256_of() { shasum -a 256 "$1" | cut -d' ' -f1; }
+else
+    echo "Neither sha256sum nor shasum is available; cannot verify the download." >&2
+    exit 1
+fi
+
+echo "Verifying checksum..."
+curl -fsSL -o SHA256SUMS "$RELEASE_BASE_URL/SHA256SUMS"
+
+EXPECTED=$(grep " \+$ASSET\$" SHA256SUMS | head -n1 | cut -d' ' -f1)
+if [ -z "$EXPECTED" ]; then
+    echo "No checksum for $ASSET in SHA256SUMS" >&2
+    exit 1
+fi
+
+ACTUAL=$(sha256_of "$ASSET")
+if [ "$EXPECTED" != "$ACTUAL" ]; then
+    echo "Checksum mismatch for $ASSET" >&2
+    echo "  expected: $EXPECTED" >&2
+    echo "  actual:   $ACTUAL" >&2
+    exit 1
+fi
+echo "✓ Checksum verified"
+
+tar xzf "$ASSET"
 
 INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"

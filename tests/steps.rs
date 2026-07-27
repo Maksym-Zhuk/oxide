@@ -32,7 +32,7 @@ fn create_new_file() {
     content: "Hello, {{ name }}!".into(),
     if_exists: IfExists::Overwrite,
   };
-  let rollbacks = execute_create(&step, dir.path(), &ctx_with("name", "world")).unwrap();
+  let rollbacks = execute_create(&step, dir.path(), &ctx_with("name", "world"), false).unwrap();
   let content = std::fs::read_to_string(dir.path().join("hello.txt")).unwrap();
   assert_eq!(content, "Hello, world!\n");
   assert!(matches!(rollbacks[0], Rollback::DeleteCreatedFile { .. }));
@@ -47,7 +47,7 @@ fn create_overwrites_existing_file() {
     content: "new content".into(),
     if_exists: IfExists::Overwrite,
   };
-  let rollbacks = execute_create(&step, dir.path(), &empty_ctx()).unwrap();
+  let rollbacks = execute_create(&step, dir.path(), &empty_ctx(), false).unwrap();
   let content = std::fs::read_to_string(dir.path().join("hello.txt")).unwrap();
   assert_eq!(content, "new content\n");
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
@@ -62,7 +62,7 @@ fn create_skips_existing_file_when_skip() {
     content: "new content".into(),
     if_exists: IfExists::Skip,
   };
-  let rollbacks = execute_create(&step, dir.path(), &empty_ctx()).unwrap();
+  let rollbacks = execute_create(&step, dir.path(), &empty_ctx(), false).unwrap();
   let content = std::fs::read_to_string(dir.path().join("hello.txt")).unwrap();
   assert_eq!(content, "original");
   assert!(rollbacks.is_empty());
@@ -76,7 +76,7 @@ fn create_nested_dirs() {
     content: "export default function Button() {}".into(),
     if_exists: IfExists::Overwrite,
   };
-  execute_create(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_create(&step, dir.path(), &empty_ctx(), false).unwrap();
   assert!(dir.path().join("src/components/Button.tsx").exists());
 }
 
@@ -526,10 +526,71 @@ fn copy_creates_new_file() {
     render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
 
   let content = std::fs::read_to_string(project_dir.path().join("output.txt")).unwrap();
   assert_eq!(content, "hello");
+}
+
+#[test]
+fn copy_ask_keeps_the_existing_file_when_there_is_nobody_to_ask() {
+  let addon_dir = assert_fs::TempDir::new().unwrap();
+  let project_dir = assert_fs::TempDir::new().unwrap();
+  addon_dir.child("src.txt").write_str("from addon").unwrap();
+  project_dir.child("dst.txt").write_str("mine").unwrap();
+
+  let step = CopyStep {
+    src: "src.txt".into(),
+    dest: "dst.txt".into(),
+    if_exists: IfExists::Ask,
+    render: true,
+  };
+
+  let rollbacks = execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    true,
+  )
+  .unwrap();
+
+  assert_eq!(
+    std::fs::read_to_string(project_dir.path().join("dst.txt")).unwrap(),
+    "mine",
+    "the prompt defaults to keeping the file, so non-interactive must too"
+  );
+  assert!(
+    rollbacks.is_empty(),
+    "nothing changed, nothing to roll back"
+  );
+}
+
+#[test]
+fn create_ask_keeps_the_existing_file_when_there_is_nobody_to_ask() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("hello.txt").write_str("mine").unwrap();
+
+  let step = CreateStep {
+    path: "hello.txt".into(),
+    content: "from addon".into(),
+    if_exists: IfExists::Ask,
+  };
+
+  let rollbacks = execute_create(&step, dir.path(), &empty_ctx(), true).unwrap();
+
+  assert_eq!(
+    std::fs::read_to_string(dir.path().join("hello.txt")).unwrap(),
+    "mine"
+  );
+  assert!(rollbacks.is_empty());
 }
 
 #[test]
@@ -545,7 +606,14 @@ fn copy_new_file_rollback_is_delete_created() {
     render: true,
   };
 
-  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  let rollbacks = execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
   assert!(matches!(rollbacks[0], Rollback::DeleteCreatedFile { .. }));
 }
 
@@ -569,7 +637,14 @@ fn copy_overwrites_existing_file() {
     render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
 
   let content = std::fs::read_to_string(project_dir.path().join("output.txt")).unwrap();
   assert_eq!(content, "new content");
@@ -589,7 +664,14 @@ fn copy_overwrite_rollback_is_restore_file() {
     render: true,
   };
 
-  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  let rollbacks = execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
@@ -607,7 +689,14 @@ fn copy_skip_leaves_existing_file_unchanged() {
     render: true,
   };
 
-  let rollbacks = execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  let rollbacks = execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
   assert!(rollbacks.is_empty());
 
   let content = std::fs::read_to_string(project_dir.path().join("dst.txt")).unwrap();
@@ -635,6 +724,7 @@ fn copy_renders_template_vars_in_path_and_content() {
     addon_dir.path(),
     project_dir.path(),
     &ctx_with("resource_name_kebab", "blog-post"),
+    false,
   )
   .unwrap();
 
@@ -662,7 +752,14 @@ fn copy_creates_destination_subdirectory() {
     render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
   assert!(project_dir.path().join("subdir/dst.txt").exists());
 }
 
@@ -682,7 +779,14 @@ fn copy_with_render_false_leaves_content_literal() {
     render: false,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
 
   let content = std::fs::read_to_string(project_dir.path().join("workflow.yml")).unwrap();
   assert_eq!(content, "run: ${{ secrets.TOKEN }}");
@@ -702,7 +806,14 @@ fn copy_binary_file_preserves_bytes() {
     render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
 
   let written = std::fs::read(project_dir.path().join("image.bin")).unwrap();
   assert_eq!(written, bytes);
@@ -726,7 +837,14 @@ fn copy_preserves_executable_bit() {
     render: true,
   };
 
-  execute_copy(&step, addon_dir.path(), project_dir.path(), &empty_ctx()).unwrap();
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
 
   let mode = std::fs::metadata(project_dir.path().join("run.sh"))
     .unwrap()
@@ -775,7 +893,7 @@ fn create_path_traversal_blocked() {
     content: "evil".into(),
     if_exists: IfExists::Overwrite,
   };
-  assert!(execute_create(&step, dir.path(), &empty_ctx()).is_err());
+  assert!(execute_create(&step, dir.path(), &empty_ctx(), false).is_err());
 }
 
 #[test]
@@ -896,7 +1014,7 @@ fn create_uses_template_var_in_path() {
 
   let mut ctx = tera::Context::new();
   ctx.insert("env", "test");
-  execute_create(&step, dir.path(), &ctx).unwrap();
+  execute_create(&step, dir.path(), &ctx, false).unwrap();
 
   let content = std::fs::read_to_string(dir.path().join(".env.test")).unwrap();
   assert_eq!(content, "ENV=test\n");
@@ -946,7 +1064,7 @@ fn run_executes_in_project_root_and_records_irreversible() {
     command: "echo hi > marker.txt".to_string(),
     description: String::new(),
   };
-  let rb = execute_run(&step, dir.path(), &empty_ctx(), true).unwrap();
+  let rb = execute_run(&step, dir.path(), &empty_ctx(), true, true).unwrap();
   assert!(
     dir.path().join("marker.txt").exists(),
     "command ran in project root"
@@ -960,7 +1078,7 @@ fn run_nonzero_exit_is_error() {
     command: "exit 3".to_string(),
     description: String::new(),
   };
-  let out = execute_run(&step, &std::env::temp_dir(), &empty_ctx(), true);
+  let out = execute_run(&step, &std::env::temp_dir(), &empty_ctx(), true, true);
   assert!(out.is_err());
 }
 
@@ -1023,4 +1141,38 @@ fn delete_target_glob_renders_template_pattern() {
   assert!(!dir.path().join("blog-post/a.tmp").exists());
   assert!(!dir.path().join("blog-post/b.tmp").exists());
   assert!(dir.path().join("blog-post/keep.txt").exists());
+}
+
+#[test]
+fn run_is_refused_non_interactively_without_allow_run() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let step = RunStep {
+    command: "echo pwned > pwned.txt".to_string(),
+    description: String::new(),
+  };
+
+  let err = execute_run(&step, dir.path(), &empty_ctx(), true, false)
+    .expect_err("a non-interactive run step must not execute without --allow-run");
+
+  assert!(
+    !dir.path().join("pwned.txt").exists(),
+    "the command must not have run"
+  );
+  assert!(
+    err.to_string().contains("--allow-run"),
+    "the error should say how to opt in: {err}"
+  );
+}
+
+#[test]
+fn run_executes_non_interactively_once_allow_run_is_given() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let step = RunStep {
+    command: "echo ok > allowed.txt".to_string(),
+    description: String::new(),
+  };
+
+  execute_run(&step, dir.path(), &empty_ctx(), true, true).unwrap();
+
+  assert!(dir.path().join("allowed.txt").exists());
 }

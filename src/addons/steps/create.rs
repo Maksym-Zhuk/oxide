@@ -11,6 +11,7 @@ pub fn execute_create(
   step: &CreateStep,
   project_root: &Path,
   ctx: &tera::Context,
+  non_interactive: bool,
 ) -> Result<Vec<Rollback>> {
   let rendered_path = super::render_string(&step.path, ctx)?;
   let path = super::safe_join(project_root, &rendered_path, "create path")?;
@@ -25,6 +26,10 @@ pub fn execute_create(
     match step.if_exists {
       IfExists::Skip => return Ok(rollbacks),
       IfExists::Ask => {
+        if non_interactive {
+          println!("  {rendered_path} already exists — keeping it (pass no --yes to be asked)");
+          return Ok(rollbacks);
+        }
         let overwrite = Confirm::new(&format!("{} already exists. Overwrite?", step.path))
           .with_default(false)
           .prompt()?;

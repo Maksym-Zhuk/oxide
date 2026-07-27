@@ -15,7 +15,7 @@ const result = spawnSync(bin, process.argv.slice(2), { stdio: "inherit" });
 if (result.error) {
 	if (result.error.code === "ENOENT") {
 		console.error(
-			"anesis: binary not found. Try reinstalling: npm install -g @anesis/anesis",
+			"anesis: binary not found. Try reinstalling: npm install -g anesis-cli",
 		);
 	} else {
 		console.error(`anesis: ${result.error.message}`);

@@ -65,6 +65,11 @@ pub fn complete_env() {
     .complete();
 }
 
+pub fn print_completions(shell: CompletionShell) -> Result<()> {
+  print!("{}", generate_completion_script(shell)?);
+  Ok(())
+}
+
 pub fn install_completions(shell: CompletionShell) -> Result<()> {
   let script = generate_completion_script(shell)?;
 

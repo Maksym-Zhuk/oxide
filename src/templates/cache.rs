@@ -68,6 +68,8 @@ pub fn update_templates_cache(
     .with_context(|| format!("Failed to read {}", anesis_json.display()))?;
   let template_info: AnesisTemplate = serde_json::from_str(&content)?;
 
+  crate::compat::check_anesis_version(&template_info.name, &template_info.anesis_version)?;
+
   let templates_json = template_path.join("anesis-templates.json");
   let mut templates_info: TemplatesCache = if templates_json.exists() {
     let content = fs::read_to_string(&templates_json)?;

@@ -1,0 +1,5 @@
+---
+source: tests/json_output.rs
+expression: "cli.json(&[\"template\", \"list\", \"--json\"])"
+---
+[]

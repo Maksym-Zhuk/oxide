@@ -18,12 +18,12 @@ use anesis::{
     link::link_template,
     loader::get_files,
     publish::publish,
-    update::update,
+    republish::republish,
   },
   upgrade::{check_cli_version_cached, render_upgrade_notice, upgrade_cli},
   utils::{
-    errors::print_error,
-    picker::{ItemKind, PickItem, pick_one},
+    errors::{exit_code_for, print_error},
+    picker::{self, ItemKind, PickItem, pick_one},
     ui::spinner,
     validate::{is_valid_github_repo_url, validate_project_name, validate_template_name},
   },
@@ -32,19 +32,69 @@ use anyhow::Result;
 use colored::Colorize;
 use inquire::Confirm;
 
+fn install_panic_hook() {
+  let default_hook = std::panic::take_hook();
+
+  std::panic::set_hook(Box::new(move |info| {
+    picker::restore_terminal();
+
+    if std::env::var("ANESIS_DEBUG").is_ok() {
+      default_hook(info);
+      return;
+    }
+
+    let location = info
+      .location()
+      .map(|l| format!("{}:{}", l.file(), l.line()))
+      .unwrap_or_else(|| "unknown location".to_string());
+
+    let message = info
+      .payload()
+      .downcast_ref::<&str>()
+      .map(|s| (*s).to_string())
+      .or_else(|| info.payload().downcast_ref::<String>().cloned())
+      .unwrap_or_else(|| "unknown cause".to_string());
+
+    eprintln!();
+    eprintln!("{} anesis crashed. This is a bug.", "error:".red().bold());
+    eprintln!();
+    eprintln!("  {message}");
+    eprintln!("  at {location}");
+    eprintln!(
+      "  anesis {} on {}",
+      env!("CARGO_PKG_VERSION"),
+      std::env::consts::OS
+    );
+    eprintln!();
+    eprintln!(
+      "  {} https://github.com/anesis-dev/anesis-cli/issues/new",
+      "report it:".cyan().bold()
+    );
+    eprintln!("  Re-run with ANESIS_DEBUG=1 for a full backtrace to attach.");
+  }));
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+  install_panic_hook();
   config::init_env();
   completions::complete_env();
   if let Err(err) = run().await {
     print_error(&err);
-    std::process::exit(1);
+    std::process::exit(exit_code_for(&err));
   }
 }
 
 async fn run() -> Result<()> {
   let cli = cli::parse();
-  let ctx = config::build_app_context()?;
+
+  config::init_logging(cli.verbose);
+  if cli.no_color {
+    colored::control::set_override(false);
+  }
+  anesis::utils::ui::set_quiet(cli.quiet);
+
+  let ctx = config::build_app_context()?.with_cli_flags(cli.no_telemetry, cli.allow_run);
 
   let json_mode = matches!(
     &cli.command,
@@ -52,6 +102,7 @@ async fn run() -> Result<()> {
       | Commands::Info { json: true }
       | Commands::Status { json: true }
       | Commands::Search { json: true, .. }
+      | Commands::Outdated { json: true }
       | Commands::Template {
         command: TemplateCommands::List { json: true } | TemplateCommands::Info { json: true, .. }
       }
@@ -63,9 +114,10 @@ async fn run() -> Result<()> {
       }
   );
   let skip_version_notice = json_mode
+    || cli.quiet
     || matches!(
       &cli.command,
-      Commands::Upgrade | Commands::Completions { .. }
+      Commands::Upgrade | Commands::Completions { .. } | Commands::Man { .. }
     );
   let version_check_handle = if skip_version_notice {
     None
@@ -155,13 +207,13 @@ async fn run() -> Result<()> {
         is_valid_github_repo_url(&template_url)?;
         publish(&ctx, &template_url, visibility, credential_id, org_id).await?;
       }
-      TemplateCommands::Update {
+      TemplateCommands::Republish {
         template_url,
         visibility,
         credential_id,
         org_id,
       } => {
-        update(&ctx, &template_url, visibility, credential_id, org_id).await?;
+        republish(&ctx, &template_url, visibility, credential_id, org_id).await?;
       }
     },
     Commands::Login => {
@@ -242,14 +294,15 @@ async fn run() -> Result<()> {
         is_valid_github_repo_url(&addon_url)?;
         addons::publish::publish_addon(&ctx, &addon_url, visibility, credential_id, org_id).await?;
       }
-      AddonCommands::Update {
+      AddonCommands::Republish {
         addon_url,
         visibility,
         credential_id,
         org_id,
       } => {
         is_valid_github_repo_url(&addon_url)?;
-        addons::update::update_addon(&ctx, &addon_url, visibility, credential_id, org_id).await?;
+        addons::republish::republish_addon(&ctx, &addon_url, visibility, credential_id, org_id)
+          .await?;
       }
     },
     Commands::Stack { command } => match command {
@@ -260,6 +313,19 @@ async fn run() -> Result<()> {
           "   Scaffold it:  {}",
           format!("anesis new <dir> --stack {stack_id}").cyan()
         );
+      }
+      StackCommands::Link { path, force } => {
+        let source = std::path::PathBuf::from(path.as_deref().unwrap_or("."));
+        match anesis::stacks::link::link_stack(&ctx, &source, force)? {
+          Some(id) => {
+            println!("✅ Stack '{id}' cached locally.");
+            println!(
+              "   Try it:  {}",
+              format!("anesis new <dir> --stack {id}").cyan()
+            );
+          }
+          None => println!("Aborted. The cached stack was left unchanged."),
+        }
       }
       StackCommands::List { json } => {
         anesis::stacks::info::print_installed_stacks(&ctx, json)?;
@@ -287,7 +353,7 @@ async fn run() -> Result<()> {
         )
         .await?;
       }
-      StackCommands::Update {
+      StackCommands::Republish {
         stack_url,
         visibility,
         credential_id,
@@ -349,9 +415,9 @@ async fn run() -> Result<()> {
       let project_root = std::env::current_dir()?;
       addons::runner::undo_addon(&addon_id, &project_root, yes)?;
     }
-    Commands::Outdated => {
+    Commands::Outdated { json } => {
       let project_root = std::env::current_dir()?;
-      addons::runner::outdated(&ctx, &project_root).await?;
+      addons::runner::outdated(&ctx, &project_root, json).await?;
     }
     Commands::Update { addon_id, yes } => {
       let project_root = std::env::current_dir()?;
@@ -363,8 +429,17 @@ async fn run() -> Result<()> {
     Commands::Mcp => {
       anesis::mcp::run_mcp()?;
     }
-    Commands::Completions { shell } => {
-      completions::install_completions(shell)?;
+    Commands::Man { dir } => {
+      let dir = std::path::PathBuf::from(dir);
+      let pages = anesis::man::generate(&dir)?;
+      println!("Wrote {} man pages to {}", pages.len(), dir.display());
+    }
+    Commands::Completions { shell, print } => {
+      if print {
+        completions::print_completions(shell)?;
+      } else {
+        completions::install_completions(shell)?;
+      }
     }
     Commands::Search { query, json } => {
       let sp = spinner("Loading registry...");
@@ -566,6 +641,7 @@ async fn create_new_project(
   let mut inputs = std::collections::HashMap::new();
   let mut excluded = std::collections::HashSet::new();
   if let Some(manifest) = anesis::templates::generator::parse_template_manifest(&files) {
+    anesis::compat::check_anesis_version(template_name, &manifest.anesis_version)?;
     addons::runner::collect_inputs(&manifest.inputs, presets, yes, &mut inputs)?;
     excluded = anesis::templates::generator::excluded_paths(&manifest.exclude, &inputs);
   }

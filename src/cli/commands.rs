@@ -4,7 +4,7 @@ use crate::completions::CompletionShell;
 
 #[derive(Subcommand)]
 pub enum AddonCommands {
-  #[command(alias = "i", about = "Install and cache an addon (anesis addon i)")]
+  #[command(visible_alias = "i", about = "Install and cache an addon")]
   Install {
     #[arg(help = "Addon id to install (omit to pick interactively)")]
     addon_id: Option<String>,
@@ -23,7 +23,7 @@ pub enum AddonCommands {
     force: bool,
   },
 
-  #[command(alias = "l", about = "List installed addons (anesis addon l)")]
+  #[command(visible_alias = "l", about = "List installed addons")]
   List {
     #[arg(long, help = "Output as JSON")]
     json: bool,
@@ -56,12 +56,12 @@ pub enum AddonCommands {
     project: Option<String>,
   },
 
-  #[command(alias = "r", about = "Remove a cached addon (anesis addon r)")]
+  #[command(visible_alias = "r", about = "Remove a cached addon")]
   Remove { addon_id: String },
 
   #[command(
-    alias = "p",
-    about = "Publish a GitHub repository as an Anesis addon (anesis addon p)"
+    visible_alias = "p",
+    about = "Publish a GitHub repository as an Anesis addon"
   )]
   Publish {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
@@ -86,10 +86,11 @@ pub enum AddonCommands {
   },
 
   #[command(
-    alias = "u",
-    about = "Update a GitHub repository as an Anesis addon (anesis addon u)"
+    visible_alias = "rp",
+    aliases = ["u", "update"],
+    about = "Refresh this addon's registry entry from its GitHub repository"
   )]
-  Update {
+  Republish {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
     addon_url: String,
 
@@ -114,10 +115,7 @@ pub enum AddonCommands {
 
 #[derive(Subcommand)]
 pub enum TemplateCommands {
-  #[command(
-    alias = "i",
-    about = "Download and cache a template locally (anesis template i)"
-  )]
+  #[command(visible_alias = "i", about = "Download and cache a template locally")]
   Install {
     #[arg(help = "Name of the template to install (omit to pick interactively)")]
     template_name: Option<String>,
@@ -136,10 +134,7 @@ pub enum TemplateCommands {
     force: bool,
   },
 
-  #[command(
-    alias = "l",
-    about = "List all locally installed templates (anesis template l)"
-  )]
+  #[command(visible_alias = "l", about = "List all locally installed templates")]
   List {
     #[arg(long, help = "Output as JSON")]
     json: bool,
@@ -155,8 +150,8 @@ pub enum TemplateCommands {
   },
 
   #[command(
-    alias = "r",
-    about = "Remove an installed template from the local cache (anesis template r)"
+    visible_alias = "r",
+    about = "Remove an installed template from the local cache"
   )]
   Remove {
     #[arg(help = "Name of the template to remove")]
@@ -164,8 +159,8 @@ pub enum TemplateCommands {
   },
 
   #[command(
-    alias = "p",
-    about = "Publish a GitHub repository as an Anesis template (anesis template p)"
+    visible_alias = "p",
+    about = "Publish a GitHub repository as an Anesis template"
   )]
   Publish {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
@@ -190,10 +185,11 @@ pub enum TemplateCommands {
   },
 
   #[command(
-    alias = "u",
-    about = "Update a GitHub repository as an Anesis template (anesis template u)"
+    visible_alias = "rp",
+    aliases = ["u", "update"],
+    about = "Refresh this template's registry entry from its GitHub repository"
   )]
-  Update {
+  Republish {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
     template_url: String,
 
@@ -219,15 +215,28 @@ pub enum TemplateCommands {
 #[derive(Subcommand)]
 pub enum StackCommands {
   #[command(
-    alias = "i",
-    about = "Download and cache a stack from the registry (anesis stack i)"
+    visible_alias = "i",
+    about = "Download and cache a stack from the registry"
   )]
   Install {
     #[arg(help = "Stack id to install")]
     stack_id: String,
   },
 
-  #[command(alias = "l", about = "List locally installed stacks (anesis stack l)")]
+  #[command(about = "Validate a local anesis.stack.json and cache it for local testing")]
+  Link {
+    #[arg(help = "Path to the stack directory or manifest (defaults to the current directory)")]
+    path: Option<String>,
+
+    #[arg(
+      short,
+      long,
+      help = "Overwrite an existing cached stack without asking"
+    )]
+    force: bool,
+  },
+
+  #[command(visible_alias = "l", about = "List locally installed stacks")]
   List {
     #[arg(long, help = "Output as JSON")]
     json: bool,
@@ -242,15 +251,15 @@ pub enum StackCommands {
     json: bool,
   },
 
-  #[command(alias = "r", about = "Remove a locally cached stack (anesis stack r)")]
+  #[command(visible_alias = "r", about = "Remove a locally cached stack")]
   Remove {
     #[arg(help = "Stack id to remove")]
     stack_id: String,
   },
 
   #[command(
-    alias = "p",
-    about = "Publish a GitHub repository as an Anesis stack (anesis stack p)"
+    visible_alias = "p",
+    about = "Publish a GitHub repository as an Anesis stack"
   )]
   Publish {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
@@ -275,10 +284,11 @@ pub enum StackCommands {
   },
 
   #[command(
-    alias = "u",
-    about = "Republish a stack from its GitHub repository (anesis stack u)"
+    visible_alias = "rp",
+    aliases = ["u", "update"],
+    about = "Refresh this stack's registry entry from its GitHub repository"
   )]
-  Update {
+  Republish {
     #[arg(help = "GitHub repository URL (e.g. https://github.com/owner/repo)")]
     stack_url: String,
 
@@ -299,7 +309,7 @@ pub enum StackCommands {
 
 #[derive(Subcommand)]
 pub enum Commands {
-  #[command(alias = "n", about = "Create a new project from a template (anesis n)")]
+  #[command(visible_alias = "n", about = "Create a new project from a template")]
   New {
     #[arg(help = "Name of the project directory to create")]
     name: String,
@@ -328,16 +338,16 @@ pub enum Commands {
     input: Vec<String>,
   },
 
-  #[command(alias = "t", about = "Manage templates (anesis t)")]
+  #[command(visible_alias = "t", about = "Manage templates")]
   Template {
     #[command(subcommand)]
     command: TemplateCommands,
   },
 
-  #[command(alias = "in", about = "Log in to your Anesis account (anesis in)")]
+  #[command(visible_alias = "in", about = "Log in to your Anesis account")]
   Login,
 
-  #[command(alias = "out", about = "Log out of your Anesis account (anesis out)")]
+  #[command(visible_alias = "out", about = "Log out of your Anesis account")]
   Logout,
 
   #[command(about = "Show information about the currently logged-in account")]
@@ -346,24 +356,22 @@ pub enum Commands {
     json: bool,
   },
 
-  #[command(alias = "a", about = "Manage addons (anesis a)")]
+  #[command(visible_alias = "a", about = "Manage addons")]
   Addon {
     #[command(subcommand)]
     command: AddonCommands,
   },
 
   #[command(
-    alias = "s",
-    about = "Manage stacks: template + ordered addons (anesis s)"
+    visible_alias = "s",
+    about = "Manage stacks: template + ordered addons"
   )]
   Stack {
     #[command(subcommand)]
     command: StackCommands,
   },
 
-  #[command(
-    about = "Run an addon command in the current project (anesis use [ADDON_ID] [COMMAND])"
-  )]
+  #[command(about = "Run an addon command in the current project")]
   Use {
     #[arg(help = "Addon id (omit to pick interactively)")]
     addon_id: Option<String>,
@@ -401,9 +409,19 @@ pub enum Commands {
   },
 
   #[command(about = "List applied addons that have a newer version in the registry")]
-  Outdated,
+  Outdated {
+    #[arg(long, help = "Output as JSON")]
+    json: bool,
+  },
 
-  #[command(about = "Upgrade an applied addon to the registry's latest version")]
+  #[command(
+    about = "Upgrade an applied addon in this project to the registry's latest version",
+    long_about = "Upgrade an addon already applied to this project to the registry's \
+                  latest version.\n\n\
+                  Not to be confused with:\n  \
+                  anesis upgrade                 — replace the anesis binary itself\n  \
+                  anesis addon republish <URL>   — refresh an addon's registry entry"
+  )]
   Update {
     #[arg(help = "Addon id to update")]
     addon_id: String,
@@ -416,7 +434,10 @@ pub enum Commands {
     yes: bool,
   },
 
-  #[command(about = "Download and install the latest Anesis release")]
+  #[command(
+    visible_alias = "self-update",
+    about = "Download and install the latest Anesis release (updates the CLI itself)"
+  )]
   Upgrade,
 
   #[command(
@@ -424,10 +445,29 @@ pub enum Commands {
   )]
   Mcp,
 
+  #[command(
+    hide = true,
+    about = "Write roff man pages for anesis into a directory"
+  )]
+  Man {
+    #[arg(help = "Directory to write the man pages into")]
+    dir: String,
+  },
+
   #[command(about = "Install shell tab completion for anesis")]
   Completions {
     #[arg(value_enum, help = "Shell to install completions for")]
     shell: CompletionShell,
+
+    #[arg(
+      long,
+      help = "Write the script to stdout instead of installing it",
+      long_help = "Write the script to stdout instead of installing it.\n\n\
+                   For packagers: a Homebrew formula or distro package installs \
+                   completions into its own prefix and must not write into the \
+                   building user's dotfiles."
+    )]
+    print: bool,
   },
 
   #[command(about = "Interactively search the registry for templates and addons")]
@@ -443,7 +483,7 @@ pub enum Commands {
   },
 
   #[command(
-    alias = "doctor",
+    visible_alias = "doctor",
     about = "Show CLI version, data paths and login status"
   )]
   Info {
@@ -451,7 +491,7 @@ pub enum Commands {
     json: bool,
   },
 
-  #[command(about = "Show this project's template and applied addons (anesis status)")]
+  #[command(about = "Show this project's template and applied addons")]
   Status {
     #[arg(long, help = "Output as JSON")]
     json: bool,

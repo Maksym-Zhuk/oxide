@@ -124,6 +124,7 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
         return ("Provide either 'template' or 'stack'".to_string(), true);
       }
       v.push("--yes".into());
+      push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
       v
     }
@@ -134,6 +135,7 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
         return ("'addon_id' and 'command' are required".to_string(), true);
       }
       let mut v = vec!["use".to_string(), id, command, "--yes".into()];
+      push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
       v
     }
@@ -150,6 +152,7 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
         stack,
         "--yes".into(),
       ];
+      push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
       v
     }
@@ -158,6 +161,12 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
   };
 
   run_self(&mut cmd, cwd.as_deref())
+}
+
+fn push_allow_run(cmd: &mut Vec<String>, args: &Value) {
+  if args.get("allow_run").and_then(Value::as_bool) == Some(true) {
+    cmd.push("--allow-run".to_string());
+  }
 }
 
 fn push_inputs(cmd: &mut Vec<String>, args: &Value) {
@@ -205,6 +214,16 @@ pub fn push_inputs_for_tests(cmd: &mut Vec<String>, args: &Value) {
   push_inputs(cmd, args)
 }
 
+#[doc(hidden)]
+pub fn push_allow_run_for_tests(cmd: &mut Vec<String>, args: &Value) {
+  push_allow_run(cmd, args)
+}
+
+#[doc(hidden)]
+pub fn tools_list_for_tests() -> Value {
+  tools_list()
+}
+
 fn tools_list() -> Value {
   json!([
     {
@@ -231,7 +250,7 @@ fn tools_list() -> Value {
     },
     {
       "name": "scaffold_project",
-      "description": "Create a new project from a template (or a stack). Non-interactive.",
+      "description": "Create a new project from a template (or a stack). Non-interactive. Addon 'run' steps are refused unless allow_run is true.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -239,6 +258,7 @@ fn tools_list() -> Value {
           "template": { "type": "string", "description": "Template name (omit if using a stack)" },
           "stack": { "type": "string", "description": "Stack id (alternative to template)" },
           "inputs": { "type": "object", "description": "Template input values by name", "additionalProperties": true },
+          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps to execute arbitrary shell commands from the registry. Defaults to false; ask the user before setting it." },
           "path": { "type": "string", "description": "Working directory to run in (defaults to the server's cwd)" }
         },
         "required": ["name"]
@@ -246,13 +266,14 @@ fn tools_list() -> Value {
     },
     {
       "name": "apply_addon",
-      "description": "Run an addon command in an existing project. Non-interactive.",
+      "description": "Run an addon command in an existing project. Non-interactive. If the command has a 'run' step it will fail unless allow_run is true.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "addon_id": { "type": "string" },
           "command": { "type": "string", "description": "Addon command to run" },
           "inputs": { "type": "object", "description": "Addon input values by name", "additionalProperties": true },
+          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps to execute arbitrary shell commands from the registry. Defaults to false; ask the user before setting it." },
           "path": { "type": "string", "description": "Project directory to run in" }
         },
         "required": ["addon_id", "command"]
@@ -260,13 +281,14 @@ fn tools_list() -> Value {
     },
     {
       "name": "apply_stack",
-      "description": "Scaffold a new project from a stack (template + ordered addons). Non-interactive.",
+      "description": "Scaffold a new project from a stack (template + ordered addons). Non-interactive. Addon 'run' steps are refused unless allow_run is true.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "name": { "type": "string", "description": "Project directory to create" },
           "stack": { "type": "string", "description": "Stack id" },
           "inputs": { "type": "object", "additionalProperties": true },
+          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps to execute arbitrary shell commands from the registry. Defaults to false; ask the user before setting it." },
           "path": { "type": "string", "description": "Working directory to run in" }
         },
         "required": ["name", "stack"]

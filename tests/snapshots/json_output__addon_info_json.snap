@@ -1,0 +1,37 @@
+---
+source: tests/json_output.rs
+expression: "cli.json(&[\"addon\", \"info\", \"docker-compose\", \"--json\"])"
+---
+{
+  "author": "anesis",
+  "description": "Adds a docker-compose.yml and a Dockerfile.",
+  "detect": [],
+  "id": "docker-compose",
+  "inputs": [],
+  "name": "Docker Compose",
+  "requires": [],
+  "schema_version": "1",
+  "variants": [
+    {
+      "commands": [
+        {
+          "description": "",
+          "inputs": [],
+          "name": "install",
+          "once": true,
+          "requires_commands": [],
+          "steps": [
+            {
+              "content": "services: {}\n",
+              "if_exists": "skip",
+              "path": "docker-compose.yml",
+              "type": "create"
+            }
+          ]
+        }
+      ],
+      "when": null
+    }
+  ],
+  "version": "0.4.1"
+}

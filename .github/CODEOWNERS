@@ -1,0 +1,21 @@
+# Every change needs a review from the maintainer.
+# Ordered most-general first; the last matching rule wins.
+
+*                           @Maksym-Zhuk
+
+# The release channel: a mistake here reaches every installed binary.
+/.github/                   @Maksym-Zhuk
+/install.sh                 @Maksym-Zhuk
+/install.ps1                @Maksym-Zhuk
+/npm/                       @Maksym-Zhuk
+/src/upgrade.rs             @Maksym-Zhuk
+
+# Anything that executes remote content or handles credentials.
+/src/addons/steps/run.rs    @Maksym-Zhuk
+/src/addons/steps/packages.rs @Maksym-Zhuk
+/src/auth/                  @Maksym-Zhuk
+/src/mcp.rs                 @Maksym-Zhuk
+/SECURITY.md                @Maksym-Zhuk
+
+# The reusable workflow every registry repository depends on.
+/tools/registry-lint/       @Maksym-Zhuk

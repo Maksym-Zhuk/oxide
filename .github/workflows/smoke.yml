@@ -1,0 +1,210 @@
+name: Smoke Test
+
+on:
+    push:
+        branches: [main]
+        tags: ["v*"]
+    pull_request:
+        branches: [main]
+    workflow_dispatch: {}
+
+env:
+    CARGO_TERM_COLOR: always
+    DATABASE_URL: postgres://postgres:postgres@localhost:5432/anesis_test
+
+jobs:
+    gate:
+        name: Check for the server repository token
+        runs-on: ubuntu-latest
+        outputs:
+            enabled: ${{ steps.check.outputs.enabled }}
+        steps:
+            - id: check
+              env:
+                  SERVER_REPO_TOKEN: ${{ secrets.SERVER_REPO_TOKEN }}
+              run: |
+                  if [ -n "$SERVER_REPO_TOKEN" ]; then
+                    echo "enabled=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "enabled=false" >> "$GITHUB_OUTPUT"
+                    echo "::warning::SERVER_REPO_TOKEN is not set - the end-to-end smoke test did not run. Set it to a token with read access to anesis-dev/anesis-server, or make that repository public."
+                  fi
+
+    smoke:
+        name: Full flow (new / use / undo) against a live server
+        needs: gate
+        if: needs.gate.outputs.enabled == 'true'
+        runs-on: ubuntu-latest
+
+        services:
+            postgres:
+                image: postgres:17
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: anesis_test
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
+        steps:
+            - name: Checkout anesis-cli
+              uses: actions/checkout@v4
+              with:
+                  path: cli
+
+            - name: Checkout anesis-server
+              uses: actions/checkout@v4
+              with:
+                  repository: anesis-dev/anesis-server
+                  token: ${{ secrets.SERVER_REPO_TOKEN }}
+                  path: server
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Cache cargo build
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: |
+                      cli
+                      server
+
+            - name: Install sqlx-cli and postgresql-client
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: sqlx-cli
+
+            - name: Run server migrations
+              working-directory: server
+              run: sqlx migrate run
+
+            - name: Build anesis-server (release)
+              working-directory: server
+              run: cargo build --release --locked
+
+            - name: Build anesis CLI (release)
+              working-directory: cli
+              run: cargo build --release --locked
+
+            - name: Seed a public template and addon
+              # Seeds directly via SQL instead of POST /template/publish, since publish
+              # requires a GitHub-authenticated CLI session and hits the real GitHub API
+              # just to re-fetch the same manifest we can read straight from the registry
+              # repos. The CLI itself always downloads template/addon *content* straight
+              # from a GitHub tarball URL (never through anesis-server), so seeding the DB
+              # with real, current commit SHAs from the public registry repos is enough
+              # for a full `new`/`use`/`undo` flow to work end to end.
+              run: |
+                  set -euo pipefail
+
+                  sudo apt-get update -qq
+                  sudo apt-get install -y --no-install-recommends postgresql-client
+
+                  template_sha=$(curl -sS https://api.github.com/repos/anesis-dev/templates/commits/main | jq -r .sha)
+                  addon_sha=$(curl -sS https://api.github.com/repos/anesis-dev/addons/commits/main | jq -r .sha)
+
+                  curl -sS -o /tmp/template.json \
+                    "https://raw.githubusercontent.com/anesis-dev/templates/${template_sha}/js/vite/react/default/anesis.template.json"
+                  curl -sS -o /tmp/addon.json \
+                    "https://raw.githubusercontent.com/anesis-dev/addons/${addon_sha}/docker-compose/anesis.addon.json"
+
+                  owner_id=$(psql "$DATABASE_URL" -q -t -A -c "
+                    INSERT INTO users (login, github_id, avatar_url)
+                    VALUES ('smoke-bot', 999999999, 'https://example.com/a.png')
+                    RETURNING id;
+                  ")
+
+                  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+                    -v owner_id="$owner_id" -v tsha="$template_sha" -v asha="$addon_sha" <<'SQL'
+                  \set tconfig `cat /tmp/template.json`
+                  \set aconfig `cat /tmp/addon.json`
+
+                  INSERT INTO templates (owner_id, url, config, name, version, commit_sha, official, visibility)
+                  VALUES (
+                    :'owner_id',
+                    'https://github.com/anesis-dev/templates/tree/main/js/vite/react/default',
+                    :'tconfig'::jsonb,
+                    'react-vite-js', '0.2.0', :'tsha', false, 'public'
+                  );
+
+                  INSERT INTO addons (owner_id, url, addon_id, name, version, commit_sha, config, official, visibility)
+                  VALUES (
+                    :'owner_id',
+                    'https://github.com/anesis-dev/addons/tree/main/docker-compose',
+                    'docker-compose', 'Docker Compose Services', '0.1.0', :'asha',
+                    :'aconfig'::jsonb, false, 'public'
+                  );
+                  SQL
+
+            - name: Start anesis-server
+              working-directory: server
+              env:
+                  JWT_SECRET: smoke-test-jwt-secret-not-for-production-use-only-1234
+                  CLIENT_ID: smoke-test-client-id
+                  CLIENT_SECRET: smoke-test-client-secret
+                  # Never actually used on this endpoint path (only real GitHub OAuth /
+                  # publish flows call out with it) — the server just requires it to be
+                  # present at startup.
+                  GITHUB_TOKEN: smoke-test-unused-dummy-token
+                  FRONTEND_URL: http://127.0.0.1:3000
+                  BACKEND_URL: http://127.0.0.1:4000
+                  PORT: "4000"
+                  APP_ENV: production
+              run: |
+                  ./target/release/anesis-server > /tmp/anesis-server.log 2>&1 &
+                  echo $! > /tmp/anesis-server.pid
+
+            - name: Wait for the server to be ready
+              run: |
+                  for _ in $(seq 1 30); do
+                    if curl -sf http://127.0.0.1:4000/template/all >/dev/null; then
+                      echo "server is up"
+                      exit 0
+                    fi
+                    sleep 1
+                  done
+                  echo "::error::server did not become ready in time"
+                  cat /tmp/anesis-server.log
+                  exit 1
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Scaffold a project, install an addon, undo it, and build
+              env:
+                  ANESIS_BACKEND_URL: http://127.0.0.1:4000
+                  ANESIS_FRONTEND_URL: http://127.0.0.1:3000
+              run: |
+                  set -euo pipefail
+                  BIN="$GITHUB_WORKSPACE/cli/target/release/anesis"
+
+                  "$BIN" new smoke-app react-vite-js --yes
+                  cd smoke-app
+
+                  "$BIN" use docker-compose install --yes
+                  test -f docker-compose.yml
+
+                  "$BIN" undo docker-compose --yes
+                  test ! -f docker-compose.yml
+
+                  npm install
+                  npm run build
+                  test -f dist/index.html
+
+            - name: Stop anesis-server
+              if: always()
+              run: kill "$(cat /tmp/anesis-server.pid)" 2>/dev/null || true
+
+            - name: Upload server log on failure
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: anesis-server-log
+                  path: /tmp/anesis-server.log

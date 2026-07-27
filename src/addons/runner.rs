@@ -1,11 +1,16 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::{
+  collections::HashMap,
+  fs,
+  path::Path,
+  sync::{Arc, Mutex},
+};
 
 use anyhow::{Context, Result, anyhow};
 use colored::Colorize;
 use inquire::{Confirm, Select, Text};
 
 use crate::{
-  context::AppContext,
+  context::{AppContext, CleanupState, CleanupTask},
   manifest::AnesisManifest,
   templates::generator::{to_camel_case, to_kebab_case, to_pascal_case, to_snake_case},
   utils::{
@@ -26,6 +31,19 @@ use super::{
   },
 };
 use crate::addons::manifest::Step;
+
+fn take_journal(journal: &Mutex<Vec<Rollback>>) -> Vec<Rollback> {
+  std::mem::take(&mut *journal.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+struct ClearCleanupOnDrop<'a>(&'a CleanupState);
+
+impl Drop for ClearCleanupOnDrop<'_> {
+  fn drop(&mut self) {
+    let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
+  }
+}
 
 pub async fn run_addon_command(
   ctx: &AppContext,
@@ -171,14 +189,25 @@ pub async fn run_addon_command(
 
   let addon_dir = ctx.paths.addons.join(addon_id);
   let total = command.steps.len();
-  let mut completed_rollbacks: Vec<Rollback> = Vec::new();
+
+  let journal: Arc<Mutex<Vec<Rollback>>> = Arc::new(Mutex::new(Vec::new()));
+  {
+    let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(CleanupTask::PartialAddon {
+      addon_id: addon_id.to_string(),
+      project_root: project_root.to_path_buf(),
+      journal: Arc::clone(&journal),
+    });
+  }
+  let _cleanup_guard = ClearCleanupOnDrop(&ctx.cleanup_state);
+
   for (idx, step) in command.steps.iter().enumerate() {
     let label = step_label(step);
     println!("{} {}", format!("[{}/{}]", idx + 1, total).dimmed(), label);
 
     let result = match step {
-      Step::Copy(s) => execute_copy(s, &addon_dir, project_root, &tera_ctx),
-      Step::Create(s) => execute_create(s, project_root, &tera_ctx),
+      Step::Copy(s) => execute_copy(s, &addon_dir, project_root, &tera_ctx, non_interactive),
+      Step::Create(s) => execute_create(s, project_root, &tera_ctx, non_interactive),
       Step::Inject(s) => execute_inject(s, project_root, &tera_ctx),
       Step::Replace(s) => execute_replace(s, project_root, &tera_ctx),
       Step::Append(s) => execute_append(s, project_root, &tera_ctx),
@@ -186,12 +215,15 @@ pub async fn run_addon_command(
       Step::Rename(s) => execute_rename(s, project_root, &tera_ctx),
       Step::Move(s) => execute_move(s, project_root, &tera_ctx),
       Step::Packages(s) => execute_packages(s, project_root),
-      Step::Run(s) => execute_run(s, project_root, &tera_ctx, non_interactive),
+      Step::Run(s) => execute_run(s, project_root, &tera_ctx, non_interactive, ctx.allow_run),
     }
     .with_context(|| format!("step {} ({}) failed", idx + 1, label));
 
     match result {
-      Ok(rollbacks) => completed_rollbacks.extend(rollbacks),
+      Ok(rollbacks) => journal
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .extend(rollbacks),
       Err(err) => {
         eprintln!("{} {:#}", "✗".red().bold(), err);
         let choice = if non_interactive {
@@ -205,7 +237,7 @@ pub async fn run_addon_command(
         };
 
         if choice == "Rollback all changes" {
-          for rollback in completed_rollbacks.into_iter().rev() {
+          for rollback in take_journal(&journal).into_iter().rev() {
             let _ = apply_rollback(rollback, project_root);
           }
           println!("Rolled back all changes made by this command.");
@@ -214,6 +246,12 @@ pub async fn run_addon_command(
         return Err(err);
       }
     }
+  }
+
+  let completed_rollbacks = take_journal(&journal);
+  {
+    let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
   }
 
   let variant_id = detected_id.unwrap_or_else(|| "universal".to_string());
@@ -632,33 +670,74 @@ pub fn is_newer_for_tests(latest: &str, current: &str) -> bool {
   is_newer(latest, current)
 }
 
-pub async fn outdated(ctx: &AppContext, project_root: &Path) -> Result<()> {
+#[derive(serde::Serialize)]
+pub struct OutdatedEntry {
+  pub id: String,
+  pub current: String,
+  pub latest: Option<String>,
+  pub outdated: bool,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub error: Option<String>,
+}
+
+pub async fn outdated(ctx: &AppContext, project_root: &Path, json: bool) -> Result<()> {
   let lock = LockFile::load(project_root)?;
+
   if lock.addons.is_empty() {
-    println!("No addons applied in this project.");
+    if json {
+      println!("[]");
+    } else {
+      println!("No addons applied in this project.");
+    }
+    return Ok(());
+  }
+
+  let mut entries = Vec::with_capacity(lock.addons.len());
+  for entry in &lock.addons {
+    entries.push(match fetch_latest_version(ctx, &entry.id).await {
+      Ok(latest) => OutdatedEntry {
+        id: entry.id.clone(),
+        current: entry.version.clone(),
+        outdated: is_newer(&latest, &entry.version),
+        latest: Some(latest),
+        error: None,
+      },
+      Err(err) => OutdatedEntry {
+        id: entry.id.clone(),
+        current: entry.version.clone(),
+        latest: None,
+        outdated: false,
+        error: Some(format!("{err:#}")),
+      },
+    });
+  }
+
+  if json {
+    println!("{}", serde_json::to_string_pretty(&entries)?);
     return Ok(());
   }
 
   let mut any = false;
-  for entry in &lock.addons {
-    match fetch_latest_version(ctx, &entry.id).await {
-      Ok(latest) if is_newer(&latest, &entry.version) => {
+  for entry in &entries {
+    match (&entry.latest, &entry.error) {
+      (Some(latest), _) if entry.outdated => {
         any = true;
         println!(
           "  {} v{} → v{}",
           entry.id.cyan(),
-          entry.version,
+          entry.current,
           latest.green()
         );
       }
-      Ok(_) => {}
-      Err(err) => eprintln!("  {} (could not check: {err:#})", entry.id.dimmed()),
+      (_, Some(err)) => eprintln!("  {} (could not check: {err})", entry.id.dimmed()),
+      _ => {}
     }
   }
-  if !any {
-    println!("All addons are up to date.");
-  } else {
+
+  if any {
     println!("\nRun `anesis update <addon_id>` to upgrade.");
+  } else {
+    println!("All addons are up to date.");
   }
   Ok(())
 }
@@ -719,7 +798,7 @@ pub async fn update_addon(
   Ok(())
 }
 
-fn apply_rollback(rollback: Rollback, project_root: &Path) -> Result<()> {
+pub fn apply_rollback(rollback: Rollback, project_root: &Path) -> Result<()> {
   match rollback {
     Rollback::DeleteCreatedFile { path } => {
       let _ = std::fs::remove_file(&path);

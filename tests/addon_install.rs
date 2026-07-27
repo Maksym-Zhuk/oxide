@@ -21,7 +21,7 @@ fn manifest(version: &str) -> AddonManifest {
     name: "Drizzle".to_string(),
     version: version.to_string(),
     description: "test addon".to_string(),
-    author: "test".to_string(),
+    author: "test".into(),
     requires: Vec::new(),
     inputs: Vec::new(),
     detect: Vec::new(),

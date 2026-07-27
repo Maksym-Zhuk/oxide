@@ -10,7 +10,7 @@ pub mod install;
 pub mod link;
 pub mod loader;
 pub mod publish;
-pub mod update;
+pub mod republish;
 
 pub struct TemplateFile {
   pub path: PathBuf,
