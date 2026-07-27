@@ -4,7 +4,8 @@ use anesis::upgrade::render_upgrade_notice;
 use chrono::{TimeZone, Utc};
 use common::{
   asset_filename_for_tests, is_cache_fresh_for_tests, is_newer_version_for_tests,
-  normalize_version_tag_for_tests, parse_version_for_tests, release_asset_url_for_tests,
+  normalize_version_tag_for_tests, parse_version_for_tests, parse_version_prerelease_for_tests,
+  release_asset_url_for_tests, release_checksums_url_for_tests, verify_asset_checksum_for_tests,
 };
 
 #[test]
@@ -16,7 +17,37 @@ fn normalize_version_tag_strips_leading_v() {
 #[test]
 fn parse_version_rejects_invalid_formats() {
   let error = parse_version_for_tests("1.2").unwrap_err();
-  assert!(error.to_string().contains("patch"));
+  assert!(
+    error.to_string().contains("1.2"),
+    "the error should name the offending version: {error}"
+  );
+}
+
+#[test]
+fn parse_version_accepts_prerelease_and_build_metadata() {
+  assert_eq!(parse_version_for_tests("1.0.0-rc1").unwrap(), (1, 0, 0));
+  assert_eq!(parse_version_for_tests("1.2.3-beta.2").unwrap(), (1, 2, 3));
+  assert_eq!(parse_version_for_tests("1.2.3+build.5").unwrap(), (1, 2, 3));
+  assert_eq!(
+    parse_version_prerelease_for_tests("1.0.0-rc1").unwrap(),
+    "rc1"
+  );
+}
+
+#[test]
+fn prerelease_versions_order_correctly_against_releases() {
+  assert!(is_newer_version_for_tests("1.0.0-rc1", "1.0.0").unwrap());
+  assert!(is_newer_version_for_tests("1.0.0-rc1", "1.0.0-rc2").unwrap());
+  assert!(!is_newer_version_for_tests("1.0.0", "1.0.0-rc2").unwrap());
+  assert!(!is_newer_version_for_tests("1.0.0-rc2", "1.0.0-rc1").unwrap());
+}
+
+#[test]
+fn normalize_version_tag_accepts_a_prerelease_tag() {
+  assert_eq!(
+    normalize_version_tag_for_tests("v1.0.0-rc1").unwrap(),
+    "1.0.0-rc1"
+  );
 }
 
 #[test]
@@ -42,7 +73,7 @@ fn release_asset_url_uses_expected_github_pattern() {
   let asset_url = release_asset_url_for_tests("1.2.3", "linux-x86_64");
   assert_eq!(
     asset_url,
-    "https://github.com/anesis-dev/anesis/releases/download/v1.2.3/anesis-linux-x86_64.tar.gz"
+    "https://github.com/anesis-dev/anesis-cli/releases/download/v1.2.3/anesis-linux-x86_64.tar.gz"
   );
 }
 
@@ -141,4 +172,50 @@ fn cache_is_stale_for_invalid_date_format() {
     "0.8.0",
     chrono::Utc::now()
   ));
+}
+
+#[test]
+fn release_checksums_url_points_at_the_tag_assets() {
+  assert_eq!(
+    release_checksums_url_for_tests("1.2.3"),
+    "https://github.com/anesis-dev/anesis-cli/releases/download/v1.2.3/SHA256SUMS"
+  );
+}
+
+const ANESIS_SHA256: &str = "187492ca0dd98db10435ba0a271b88367e3f3f5f0af4715630266837397086e4";
+
+#[test]
+fn verify_asset_checksum_accepts_a_matching_sum() {
+  let bytes = b"anesis";
+  let sums = format!("{ANESIS_SHA256}  anesis-linux-x86_64.tar.gz\n");
+  assert!(
+    verify_asset_checksum_for_tests(bytes, &sums, "anesis-linux-x86_64.tar.gz").is_ok(),
+    "expected the published sum to verify"
+  );
+}
+
+#[test]
+fn verify_asset_checksum_rejects_a_tampered_archive() {
+  let sums = format!("{ANESIS_SHA256}  anesis-linux-x86_64.tar.gz\n");
+  let error =
+    verify_asset_checksum_for_tests(b"tampered", &sums, "anesis-linux-x86_64.tar.gz").unwrap_err();
+  assert!(error.to_string().contains("Checksum mismatch"));
+}
+
+#[test]
+fn verify_asset_checksum_rejects_a_missing_entry() {
+  let sums = format!("{ANESIS_SHA256}  anesis-linux-x86_64.tar.gz\n");
+  let error =
+    verify_asset_checksum_for_tests(b"anesis", &sums, "anesis-windows-x86_64.zip").unwrap_err();
+  assert!(error.to_string().contains("No checksum for"));
+}
+
+#[test]
+fn verify_asset_checksum_picks_the_right_line_from_a_full_sums_file() {
+  let sums = format!(
+    "0000000000000000000000000000000000000000000000000000000000000000  anesis-macos-aarch64.tar.gz\n\
+     {ANESIS_SHA256}  anesis-linux-x86_64.tar.gz\n\
+     1111111111111111111111111111111111111111111111111111111111111111  anesis-windows-x86_64.zip\n"
+  );
+  assert!(verify_asset_checksum_for_tests(b"anesis", &sums, "anesis-linux-x86_64.tar.gz").is_ok());
 }

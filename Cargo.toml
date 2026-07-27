@@ -1,23 +1,26 @@
 [package]
 name = "anesis"
-version = "0.12.5"
+version = "1.0.0"
 edition = "2024"
 authors = ["Maksym <maksymzhuk759@gmail.com>"]
 description = "CLI for scaffolding projects from remote templates and extending them with project addons"
-license-file = "LICENSE.md"
-repository = "https://github.com/anesis-dev/anesis"
+license = "PolyForm-Noncommercial-1.0.0"
+repository = "https://github.com/anesis-dev/anesis-cli"
+homepage = "https://anesis-dev.vercel.app"
 documentation = "https://docs.rs/anesis"
 readme = "README.md"
 keywords = ["cli", "scaffold", "template", "addon"]
 categories = ["command-line-utilities", "development-tools"]
+# edition 2024 + let-chains (main.rs, upgrade.rs)
+rust-version = "1.88"
 
 include = [
   "src/**/*",
-  "templates/**/*",
   "Cargo.toml",
   "LICENSE.md",
   "README.md",
   "CHANGELOG.md",
+  "COMPATIBILITY.md",
 ]
 
 [badges]
@@ -31,10 +34,8 @@ indicatif = "0.18.3"
 colored = "3.1.1"
 tera = "1.19"
 tokio = { version = "1.36", features = ["rt", "macros", "net", "time"] }
-walkdir = "2.4"
 ignore = "0.4"
 tempfile = "3.10"
-fs_extra = "1.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9.33"
@@ -52,7 +53,6 @@ thiserror = "2.0.18"
 glob = "0.3"
 regex = "1.10"
 semver = "1.0"
-include_dir = "0.7"
 dirs = "6.0"
 which = "7"
 ctrlc = "3.5.2"
@@ -63,23 +63,30 @@ axum = "0.8.8"
 open = "5.3.3"
 url = "2.5.8"
 uuid = { version = "1", features = ["v4"] }
-dialoguer = "0.12.0"
 log = "0.4.29"
 env_logger = "0.11.10"
 dotenvy = "0.15.7"
 base64 = "0.22"
+sha2 = "0.10"
+clap_mangen = "0.3.0"
 
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"
 assert_fs = "1.1"
+# `--json` output is a public v1.0 contract. Snapshots make an accidental key
+# rename or shape change fail the build instead of silently breaking scripts.
+insta = { version = "1.43", features = ["json", "redactions"] }
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
+# `panic = "abort"` is deliberately NOT set. The picker puts the terminal into
+# raw mode on the alternate screen and restores it from a `Drop` guard; aborting
+# skips every destructor, so a panic mid-picker left the user's shell unusable.
+# Unwinding also lets the panic hook in `main.rs` print a report-a-bug message.
 
 [profile.dev]
 opt-level = 0

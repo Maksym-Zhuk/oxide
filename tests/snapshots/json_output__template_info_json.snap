@@ -1,0 +1,27 @@
+---
+source: tests/json_output.rs
+expression: "cli.json(&[\"template\", \"info\", \"react-vite-ts\", \"--json\"])"
+---
+{
+  "anesisVersion": ">=1.0.0",
+  "exclude": [],
+  "inputs": [
+    {
+      "default": "false",
+      "description": "Include React Router",
+      "name": "use_router",
+      "options": [],
+      "required": false,
+      "type": "boolean"
+    }
+  ],
+  "metadata": {
+    "description": "A React SPA scaffolded with Vite.",
+    "displayName": "React + Vite (TypeScript)"
+  },
+  "name": "react-vite-ts",
+  "repository": {
+    "url": "https://github.com/anesis-dev/templates"
+  },
+  "version": "0.2.0"
+}

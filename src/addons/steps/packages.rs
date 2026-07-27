@@ -84,8 +84,15 @@ pub fn execute_packages(step: &PackagesStep, project_root: &Path) -> Result<Vec<
     }
   }
 
+  let program = which::which(pm.program()).with_context(|| {
+    format!(
+      "'{}' was not found on PATH — is it installed?",
+      pm.program()
+    )
+  })?;
+
   let run = |extra: &[&str], specs: &[String]| -> Result<()> {
-    let status = Command::new(pm.program())
+    let status = Command::new(&program)
       .args(pm.add_args())
       .args(extra)
       .args(specs)

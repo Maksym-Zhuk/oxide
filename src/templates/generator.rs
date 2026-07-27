@@ -8,7 +8,7 @@ use anyhow::{Result, anyhow};
 use tera::{Context, Tera};
 
 use crate::{
-  context::AppContext,
+  context::{AppContext, CleanupTask},
   manifest::AnesisManifest,
   templates::{AnesisTemplate, ExcludeBlock, TemplateFile},
 };
@@ -23,7 +23,15 @@ pub fn extract_template(
   excluded: &HashSet<PathBuf>,
 ) -> Result<()> {
   let output_path = PathBuf::from(project_name);
+  let existed_before = output_path.exists();
   fs::create_dir_all(&output_path)?;
+
+  if !existed_before {
+    let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(CleanupTask::PartialProject {
+      path: output_path.clone(),
+    });
+  }
 
   let mut context = Context::new();
   context.insert("project_name", project_name);
@@ -33,9 +41,14 @@ pub fn extract_template(
 
   let mut tera = Tera::default();
 
-  extract_dir_contents(files, &output_path, &mut tera, &context, ctx, excluded)?;
+  let result = extract_dir_contents(files, &output_path, &mut tera, &context, ctx, excluded);
 
-  Ok(())
+  {
+    let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
+  }
+
+  result
 }
 
 pub fn parse_template_manifest(files: &[TemplateFile]) -> Option<AnesisTemplate> {

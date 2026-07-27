@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use comfy_table::{ContentArrangement, Table, presets::UTF8_FULL_CONDENSED};
@@ -19,7 +20,21 @@ pub fn truncate(s: &str, max: usize) -> String {
   format!("{}…", short.trim_end())
 }
 
+static QUIET: AtomicBool = AtomicBool::new(false);
+
+pub fn set_quiet(quiet: bool) {
+  QUIET.store(quiet, Ordering::Relaxed);
+}
+
+pub fn is_quiet() -> bool {
+  QUIET.load(Ordering::Relaxed)
+}
+
 pub fn spinner(msg: impl Into<String>) -> ProgressBar {
+  if is_quiet() {
+    return ProgressBar::hidden();
+  }
+
   let pb = ProgressBar::new_spinner();
   pb.set_style(
     ProgressStyle::with_template("{spinner:.cyan} {msg}")

@@ -22,22 +22,76 @@ pub struct User {
   pub name: String,
 }
 
-pub async fn run_local_auth_server(expected_state: String, frontend_url: &str) -> Result<User> {
+pub const CALLBACK_PORTS: &[u16] = &[8080, 8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089];
+
+pub struct AuthListener {
+  listener: tokio::net::TcpListener,
+  port: u16,
+  expected_state: String,
+  frontend_url: String,
+}
+
+impl AuthListener {
+  pub fn port(&self) -> u16 {
+    self.port
+  }
+}
+
+pub async fn bind_local_auth_server(
+  expected_state: String,
+  frontend_url: &str,
+) -> Result<AuthListener> {
+  let mut last_err = None;
+
+  for &port in CALLBACK_PORTS {
+    match try_bind(port) {
+      Ok(listener) => {
+        return Ok(AuthListener {
+          listener,
+          port,
+          expected_state,
+          frontend_url: frontend_url.to_string(),
+        });
+      }
+      Err(err) => last_err = Some(err),
+    }
+  }
+
+  let first = CALLBACK_PORTS.first().copied().unwrap_or(0);
+  let last = CALLBACK_PORTS.last().copied().unwrap_or(0);
+  Err(anyhow!(
+    "Could not start the login callback listener: every port from {first} to {last} is in use. \
+     Stop whatever is using them and try again.{}",
+    last_err
+      .map(|e| format!(" (last error: {e})"))
+      .unwrap_or_default()
+  ))
+}
+
+fn try_bind(port: u16) -> Result<tokio::net::TcpListener> {
+  let socket = tokio::net::TcpSocket::new_v4()?;
+  socket.bind(format!("127.0.0.1:{port}").parse()?)?;
+  Ok(socket.listen(1024)?)
+}
+
+pub async fn serve_local_auth_server(bound: AuthListener) -> Result<User> {
+  let AuthListener {
+    listener,
+    expected_state,
+    frontend_url,
+    ..
+  } = bound;
+
   let notify = Arc::new(Notify::new());
   let notify_clone = notify.clone();
   let (tx, rx) = oneshot::channel::<User>();
 
   let shared_tx: SharedTx = Arc::new(Mutex::new(Some(tx)));
-  let state: AppState = (shared_tx, expected_state, frontend_url.to_string());
+  let state: AppState = (shared_tx, expected_state, frontend_url);
 
   let app = Router::new()
     .route("/callback", get(callback))
     .with_state(state);
-
-  let socket = tokio::net::TcpSocket::new_v4()?;
-  socket.set_reuseaddr(true)?;
-  socket.bind("127.0.0.1:8080".parse()?)?;
-  let listener = socket.listen(1024)?;
 
   let server = axum::serve(listener, app).with_graceful_shutdown(async move {
     notify_clone.notified().await;

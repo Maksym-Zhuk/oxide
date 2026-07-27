@@ -53,13 +53,21 @@ pub fn read_installed_stacks(ctx: &AppContext) -> Result<Vec<StackManifest>> {
 }
 
 pub async fn resolve_stack(ctx: &AppContext, reference: &str) -> Result<StackManifest> {
-  let path = Path::new(reference);
-  if path.exists() {
-    return load_stack(path);
+  if let Some(path) = local_manifest_path(reference) {
+    return load_stack(&path);
   }
   let cached = cached_path(ctx, reference);
   if cached.exists() {
     return load_stack(&cached);
   }
   install_stack(ctx, reference).await
+}
+
+fn local_manifest_path(reference: &str) -> Option<PathBuf> {
+  let path = Path::new(reference);
+  if path.is_dir() {
+    let manifest = path.join("anesis.stack.json");
+    return manifest.is_file().then_some(manifest);
+  }
+  path.is_file().then(|| path.to_path_buf())
 }

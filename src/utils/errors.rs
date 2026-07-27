@@ -17,6 +17,62 @@ pub enum AnesisError {
   NetworkConnect,
   #[error("The request timed out.")]
   NetworkTimeout,
+  #[error("{0} needs an interactive terminal.")]
+  NotATerminal(String),
+}
+
+pub mod exit_code {
+  pub const FAILURE: i32 = 1;
+  pub const USAGE: i32 = 2;
+  pub const AUTH: i32 = 3;
+  pub const NETWORK: i32 = 4;
+  pub const NOT_FOUND: i32 = 5;
+  pub const NOT_A_TERMINAL: i32 = 6;
+}
+
+pub fn exit_code_for(err: &anyhow::Error) -> i32 {
+  for cause in err.chain() {
+    if let Some(anesis_err) = cause.downcast_ref::<AnesisError>() {
+      return match anesis_err {
+        AnesisError::NotLoggedIn | AnesisError::SessionExpired | AnesisError::HttpUnauthorized => {
+          exit_code::AUTH
+        }
+        AnesisError::HttpNotFound(_) => exit_code::NOT_FOUND,
+        AnesisError::HttpServerError(_)
+        | AnesisError::NetworkConnect
+        | AnesisError::NetworkTimeout => exit_code::NETWORK,
+        AnesisError::NotATerminal(_) => exit_code::NOT_A_TERMINAL,
+      };
+    }
+
+    if let Some(reqwest_err) = cause.downcast_ref::<reqwest::Error>() {
+      if reqwest_err
+        .status()
+        .is_some_and(|s| s == reqwest::StatusCode::NOT_FOUND)
+      {
+        return exit_code::NOT_FOUND;
+      }
+      if reqwest_err.status().is_some_and(|s| {
+        s == reqwest::StatusCode::UNAUTHORIZED || s == reqwest::StatusCode::FORBIDDEN
+      }) {
+        return exit_code::AUTH;
+      }
+      return exit_code::NETWORK;
+    }
+
+    if is_not_a_tty(cause) {
+      return exit_code::NOT_A_TERMINAL;
+    }
+  }
+
+  exit_code::FAILURE
+}
+
+fn is_not_a_tty(cause: &(dyn std::error::Error + 'static)) -> bool {
+  matches!(
+    cause.downcast_ref::<inquire::InquireError>(),
+    Some(inquire::InquireError::NotTTY)
+  )
 }
 
 pub fn classify_reqwest_error(err: reqwest::Error, resource: &str) -> anyhow::Error {
@@ -57,6 +113,21 @@ pub fn print_error(err: &anyhow::Error) {
   }
 
   for cause in err.chain() {
+    if is_not_a_tty(cause) {
+      eprintln!(
+        "{} This command needs an interactive terminal, and there isn't one.",
+        "error:".red().bold()
+      );
+      eprintln!(
+        "  {} Pass `--yes` to accept defaults, and `--input NAME=VALUE` for each value \
+         the command would have asked for.",
+        "hint:".cyan().bold()
+      );
+      return;
+    }
+  }
+
+  for cause in err.chain() {
     if let Some(reqwest_err) = cause.downcast_ref::<reqwest::Error>() {
       if err.downcast_ref::<reqwest::Error>().is_some() {
         eprintln!(
@@ -90,6 +161,9 @@ fn hint_for_anesis_error(err: &AnesisError) -> Option<&'static str> {
     AnesisError::NetworkTimeout => {
       Some("The server may be starting up (cold start). Wait a moment and try again.")
     }
+    AnesisError::NotATerminal(_) => Some(
+      "Pass `--yes` to accept defaults, and `--input NAME=VALUE` for each value the addon needs.",
+    ),
   }
 }
 

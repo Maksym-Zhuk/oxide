@@ -1,4 +1,4 @@
-use std::io::{Write, stderr};
+use std::io::{IsTerminal, Write, stderr};
 
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -6,9 +6,13 @@ use crossterm::{
   cursor::{Hide, MoveTo, Show},
   event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, read},
   execute, queue,
-  terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode, size},
+  terminal::{
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
+    enable_raw_mode, size,
+  },
 };
 
+use crate::utils::errors::AnesisError;
 use crate::utils::ui::truncate;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -61,19 +65,41 @@ fn match_score(name: &str, query: &str, tokens: &[&str]) -> i32 {
   score
 }
 
+struct TerminalGuard;
+
+impl TerminalGuard {
+  fn enter() -> Result<Self> {
+    enable_raw_mode().context("Failed to enter raw mode")?;
+    let _ = execute!(stderr(), EnterAlternateScreen, Hide);
+    Ok(Self)
+  }
+}
+
+impl Drop for TerminalGuard {
+  fn drop(&mut self) {
+    let _ = execute!(stderr(), Show, LeaveAlternateScreen);
+    let _ = disable_raw_mode();
+  }
+}
+
+pub fn restore_terminal() {
+  let _ = execute!(stderr(), Show, LeaveAlternateScreen);
+  let _ = disable_raw_mode();
+}
+
 pub fn pick(
   items: &[PickItem],
   title: &str,
   show_kind: bool,
   initial_filter: &str,
 ) -> Result<Option<usize>> {
-  enable_raw_mode().context("Failed to enter raw mode")?;
+  if !stderr().is_terminal() {
+    return Err(AnesisError::NotATerminal("Choosing from a list".to_string()).into());
+  }
+
+  let _guard = TerminalGuard::enter()?;
   let mut out = stderr();
-  let _ = execute!(out, Hide);
-  let result = picker_loop(&mut out, items, title, show_kind, initial_filter);
-  let _ = execute!(out, Show, MoveTo(0, 0), Clear(ClearType::All));
-  let _ = disable_raw_mode();
-  result
+  picker_loop(&mut out, items, title, show_kind, initial_filter)
 }
 
 pub async fn pick_one(

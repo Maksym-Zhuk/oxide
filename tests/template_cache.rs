@@ -28,6 +28,8 @@ fn make_test_ctx(templates_dir: &std::path::Path) -> AppContext {
     cleanup_state: std::sync::Arc::new(std::sync::Mutex::new(None)),
     backend_url: String::new(),
     frontend_url: String::new(),
+    telemetry: false,
+    allow_run: false,
   }
 }
 
@@ -35,7 +37,7 @@ fn write_anesis_template_json(dir: &assert_fs::TempDir, subdir: &str, name: &str
   let json = serde_json::json!({
     "name": name,
     "version": "1.0.0",
-    "anesisVersion": "0.5.0",
+    "anesisVersion": ">=0.5.0",
     "repository": { "url": "https://github.com/example/repo" },
     "metadata": { "displayName": name, "description": "test" }
   });

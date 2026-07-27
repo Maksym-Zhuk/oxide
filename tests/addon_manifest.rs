@@ -16,7 +16,7 @@ author: Test User
   assert_eq!(manifest.name, "Test Addon");
   assert_eq!(manifest.version, "1.0.0");
   assert_eq!(manifest.description, "A test addon");
-  assert_eq!(manifest.author, "Test User");
+  assert_eq!(manifest.author.to_string(), "Test User");
   assert!(manifest.requires.is_empty());
   assert!(manifest.inputs.is_empty());
   assert!(manifest.detect.is_empty());

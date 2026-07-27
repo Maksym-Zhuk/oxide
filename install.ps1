@@ -1,8 +1,12 @@
 $ErrorActionPreference = "Stop"
 
 $APP_NAME = "anesis"
-$REPO = "anesis-dev/anesis"
-$ARCH = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "i686" }
+$REPO = "anesis-dev/anesis-cli"
+if (-not [Environment]::Is64BitOperatingSystem) {
+    Write-Host "Unsupported architecture: anesis ships 64-bit Windows binaries only." -ForegroundColor Red
+    exit 1
+}
+$ARCH = "x86_64"
 
 Write-Host "Fetching latest version..." -ForegroundColor Cyan
 
@@ -21,15 +25,41 @@ if ([string]::IsNullOrEmpty($LATEST_VERSION)) {
 
 Write-Host "Installing $APP_NAME $LATEST_VERSION..." -ForegroundColor Green
 
-$DOWNLOAD_URL = "https://github.com/$REPO/releases/download/$LATEST_VERSION/${APP_NAME}-windows-${ARCH}.zip"
+$ASSET = "${APP_NAME}-windows-${ARCH}.zip"
+$RELEASE_BASE_URL = "https://github.com/$REPO/releases/download/$LATEST_VERSION"
+$DOWNLOAD_URL = "$RELEASE_BASE_URL/$ASSET"
 $TMP_DIR = Join-Path $env:TEMP ([System.IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $TMP_DIR | Out-Null
 
 Write-Host "Downloading from $DOWNLOAD_URL..." -ForegroundColor Cyan
 
 try {
-    $zipPath = Join-Path $TMP_DIR "$APP_NAME.zip"
+    $zipPath = Join-Path $TMP_DIR $ASSET
     Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $zipPath
+
+    # Verify the archive against the release SHA256SUMS before extracting it.
+    Write-Host "Verifying checksum..." -ForegroundColor Cyan
+    $sumsPath = Join-Path $TMP_DIR "SHA256SUMS"
+    Invoke-WebRequest -Uri "$RELEASE_BASE_URL/SHA256SUMS" -OutFile $sumsPath
+
+    $expected = $null
+    foreach ($line in Get-Content $sumsPath) {
+        $fields = $line -split '\s+', 2
+        if ($fields.Count -eq 2 -and $fields[1].Trim() -eq $ASSET) {
+            $expected = $fields[0].Trim().ToLowerInvariant()
+            break
+        }
+    }
+    if (-not $expected) {
+        throw "No checksum for $ASSET in SHA256SUMS"
+    }
+
+    $actual = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($expected -ne $actual) {
+        throw "Checksum mismatch for ${ASSET}: expected $expected, got $actual"
+    }
+    Write-Host "✓ Checksum verified" -ForegroundColor Green
+
     Expand-Archive -Path $zipPath -DestinationPath $TMP_DIR -Force
 
     $INSTALL_DIR = Join-Path $env:USERPROFILE ".local\bin"

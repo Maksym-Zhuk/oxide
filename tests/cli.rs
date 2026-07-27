@@ -16,7 +16,56 @@ fn help_flag() {
 
 #[test]
 fn no_args_shows_help() {
-  cmd().assert().failure();
+  cmd()
+    .assert()
+    .failure()
+    .code(2)
+    .stderr(contains("Commands:"))
+    .stderr(contains("Scaffold projects from remote templates"));
+}
+
+#[test]
+fn top_level_help_lists_visible_aliases() {
+  cmd()
+    .arg("--help")
+    .assert()
+    .success()
+    .stdout(contains("[aliases: n]"))
+    .stdout(contains("[aliases: t]"))
+    .stdout(contains("[aliases: a]"))
+    .stdout(contains("[aliases: s]"))
+    .stdout(contains("[aliases: in]"))
+    .stdout(contains("[aliases: out]"))
+    .stdout(contains("[aliases: doctor]"));
+}
+
+#[test]
+fn top_level_help_has_an_about_line() {
+  cmd()
+    .arg("-h")
+    .assert()
+    .success()
+    .stdout(contains("Scaffold projects from remote templates"));
+
+  cmd()
+    .arg("--help")
+    .assert()
+    .success()
+    .stdout(contains("Anesis scaffolds a project from a template"))
+    .stdout(contains("anesis new"));
+}
+
+#[test]
+fn short_aliases_resolve_to_their_command() {
+  for (alias, canonical) in [("t", "template"), ("a", "addon"), ("s", "stack")] {
+    let aliased = cmd().args([alias, "--help"]).assert().success();
+    let direct = cmd().args([canonical, "--help"]).assert().success();
+    assert_eq!(
+      String::from_utf8_lossy(&aliased.get_output().stdout),
+      String::from_utf8_lossy(&direct.get_output().stdout),
+      "`anesis {alias}` should be `anesis {canonical}`"
+    );
+  }
 }
 
 #[test]
@@ -25,7 +74,7 @@ fn template_help() {
     .args(["template", "--help"])
     .assert()
     .success()
-    .stdout(contains("(anesis t)"))
+    .stdout(contains("Manage templates"))
     .stdout(contains("install"))
     .stdout(contains("list"))
     .stdout(contains("remove"))
@@ -75,7 +124,7 @@ fn addon_help() {
     .args(["addon", "--help"])
     .assert()
     .success()
-    .stdout(contains("(anesis a)"))
+    .stdout(contains("Manage addons"))
     .stdout(contains("install"))
     .stdout(contains("list"))
     .stdout(contains("remove"));
@@ -115,7 +164,7 @@ fn new_help() {
     .args(["new", "--help"])
     .assert()
     .success()
-    .stdout(contains("(anesis n)"))
+    .stdout(contains("Create a new project from a template"))
     .stdout(contains("template"));
 }
 
@@ -140,7 +189,7 @@ fn login_help() {
     .args(["login", "--help"])
     .assert()
     .success()
-    .stdout(contains("(anesis in)"));
+    .stdout(contains("Log in to your Anesis account"));
 }
 
 #[test]
@@ -149,7 +198,7 @@ fn logout_help() {
     .args(["logout", "--help"])
     .assert()
     .success()
-    .stdout(contains("(anesis out)"));
+    .stdout(contains("Log out of your Anesis account"));
 }
 
 #[test]
@@ -172,7 +221,7 @@ fn use_help() {
     .args(["use", "--help"])
     .assert()
     .success()
-    .stdout(contains("anesis use [ADDON_ID] [COMMAND]"));
+    .stdout(contains("Usage: anesis use [OPTIONS] [ADDON_ID] [COMMAND]"));
 }
 
 #[test]
@@ -261,4 +310,157 @@ fn version_flag() {
     .assert()
     .success()
     .stdout(contains("anesis"));
+}
+
+#[test]
+fn republish_replaces_the_publish_side_update_verb() {
+  for group in ["template", "addon", "stack"] {
+    cmd()
+      .args([group, "--help"])
+      .assert()
+      .success()
+      .stdout(contains("republish"))
+      .stdout(contains("Refresh"));
+
+    let output = cmd().args([group, "update", "--help"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(
+      stdout.contains("Refresh"),
+      "`{group} update` should still reach republish, got: {stdout}"
+    );
+  }
+}
+
+#[test]
+fn upgrade_advertises_the_self_update_alias() {
+  cmd()
+    .arg("--help")
+    .assert()
+    .success()
+    .stdout(contains("self-update"));
+
+  cmd()
+    .args(["self-update", "--help"])
+    .assert()
+    .success()
+    .stdout(contains("latest Anesis release"));
+}
+
+#[test]
+fn update_help_disambiguates_the_three_verbs() {
+  cmd()
+    .args(["update", "--help"])
+    .assert()
+    .success()
+    .stdout(contains("anesis upgrade"))
+    .stdout(contains("anesis addon republish"));
+}
+
+#[test]
+fn stack_link_exists_for_symmetry_with_template_and_addon() {
+  cmd()
+    .args(["stack", "--help"])
+    .assert()
+    .success()
+    .stdout(contains("link"));
+
+  cmd()
+    .args(["stack", "link", "--help"])
+    .assert()
+    .success()
+    .stdout(contains("anesis.stack.json"))
+    .stdout(contains("--force"));
+}
+
+#[test]
+fn outdated_accepts_json() {
+  cmd()
+    .args(["outdated", "--help"])
+    .assert()
+    .success()
+    .stdout(contains("--json"));
+}
+
+#[test]
+fn global_presentation_flags_are_available_on_every_subcommand() {
+  for args in [
+    vec!["--help"],
+    vec!["new", "--help"],
+    vec!["addon", "install", "--help"],
+  ] {
+    let output = cmd().args(&args).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    for flag in ["--verbose", "--quiet", "--no-color"] {
+      assert!(
+        stdout.contains(flag),
+        "{args:?} help is missing the global {flag}: {stdout}"
+      );
+    }
+  }
+}
+
+#[test]
+fn verbose_and_quiet_conflict() {
+  cmd()
+    .args(["--verbose", "--quiet", "info"])
+    .assert()
+    .failure()
+    .code(2)
+    .stderr(contains("cannot be used with"));
+}
+
+#[test]
+fn quiet_keeps_command_output_and_exit_code() {
+  let home = assert_fs::TempDir::new().unwrap();
+  cmd()
+    .env("HOME", home.path())
+    .env("USERPROFILE", home.path())
+    .args(["--quiet", "info"])
+    .assert()
+    .success()
+    .stdout(contains("anesis"));
+}
+
+#[test]
+fn man_writes_a_page_per_command() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  cmd()
+    .args(["man", dir.path().to_str().unwrap()])
+    .assert()
+    .success()
+    .stdout(contains("man pages"));
+
+  for page in [
+    "anesis.1",
+    "anesis-new.1",
+    "anesis-addon.1",
+    "anesis-addon-install.1",
+    "anesis-stack-link.1",
+    "anesis-template-republish.1",
+  ] {
+    assert!(
+      dir.path().join(page).exists(),
+      "{page} was not generated in {}",
+      dir.path().display()
+    );
+  }
+
+  let root = std::fs::read_to_string(dir.path().join("anesis.1")).unwrap();
+  assert!(root.contains(".TH"), "not a roff page: {root}");
+  assert!(root.contains("anesis"), "{root}");
+
+  assert!(
+    !dir.path().join("anesis-man.1").exists(),
+    "the hidden `man` command should not get its own page"
+  );
+}
+
+#[test]
+fn man_is_hidden_from_help() {
+  let output = cmd().arg("--help").assert().success();
+  let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+  assert!(
+    !stdout.contains("\n  man"),
+    "the man command should be hidden from --help: {stdout}"
+  );
 }

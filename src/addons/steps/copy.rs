@@ -12,6 +12,7 @@ pub fn execute_copy(
   addon_dir: &Path,
   project_root: &Path,
   ctx: &tera::Context,
+  non_interactive: bool,
 ) -> Result<Vec<Rollback>> {
   let rendered_src = super::render_string(&step.src, ctx)?;
   let rendered_dest = super::render_string(&step.dest, ctx)?;
@@ -24,6 +25,10 @@ pub fn execute_copy(
     match step.if_exists {
       IfExists::Skip => return Ok(rollbacks),
       IfExists::Ask => {
+        if non_interactive {
+          println!("  {rendered_dest} already exists — keeping it (pass no --yes to be asked)");
+          return Ok(rollbacks);
+        }
         let overwrite = Confirm::new(&format!("{} already exists. Overwrite?", rendered_dest))
           .with_default(false)
           .prompt()?;

@@ -3,39 +3,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::{auth::token::get_auth_user, context::AppContext, utils::ui::spinner};
 
-#[derive(Serialize)]
-struct UpdateAddonDto {
-  url: String,
+#[derive(Deserialize, Serialize)]
+pub struct RepublishTemplateDto {
+  pub url: String,
   #[serde(skip_serializing_if = "Option::is_none")]
-  visibility: Option<String>,
+  pub visibility: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  repo_credential_id: Option<String>,
+  pub repo_credential_id: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  organization_id: Option<String>,
+  pub organization_id: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct UpdateAddonResponse {
-  message: String,
+#[derive(Deserialize, Serialize)]
+pub struct RepublishTemplateResponse {
+  pub message: String,
 }
 
-pub async fn update_addon(
+pub async fn republish(
   ctx: &AppContext,
-  addon_url: &str,
+  template_url: &str,
   visibility: Option<String>,
   credential_id: Option<String>,
   org_id: Option<String>,
 ) -> Result<()> {
   let user = get_auth_user(&ctx.paths.auth)?;
 
-  let sp = spinner("Updating addon in registry...");
-  let res: UpdateAddonResponse = ctx
+  let sp = spinner("Republishing template to registry...");
+  let res: RepublishTemplateResponse = ctx
     .client
-    .patch(format!("{}/addon", ctx.backend_url))
+    .patch(format!("{}/template", ctx.backend_url))
     .bearer_auth(user.token)
     .header("Content-Type", "application/json")
-    .json(&UpdateAddonDto {
-      url: addon_url.to_string(),
+    .json(&RepublishTemplateDto {
+      url: template_url.to_string(),
       visibility,
       repo_credential_id: credential_id,
       organization_id: org_id,

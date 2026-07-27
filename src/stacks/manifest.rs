@@ -10,9 +10,17 @@ pub struct StackManifest {
   pub name: String,
   #[serde(default)]
   pub description: String,
+  pub version: String,
+  pub author: Author,
   pub template: String,
   #[serde(default)]
   pub addons: Vec<StackAddon>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Author {
+  pub name: String,
+  pub github: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,6 +52,8 @@ pub fn load_stack(path: &Path) -> Result<StackManifest> {
 }
 
 pub fn validate(stack: &StackManifest) -> Result<()> {
+  crate::compat::check_schema_version("stack", &stack.id, &stack.schema_version)?;
+
   if stack.template.trim().is_empty() {
     return Err(anyhow!("stack '{}' declares no template", stack.id));
   }

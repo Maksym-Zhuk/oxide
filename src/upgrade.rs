@@ -10,11 +10,13 @@ use reqwest::{
   header::{ACCEPT, USER_AGENT},
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::{context::AppContext, utils::ui::spinner};
 
-const RELEASES_API_URL: &str = "https://api.github.com/repos/anesis-dev/anesis/releases/latest";
-const RELEASES_DOWNLOAD_BASE_URL: &str = "https://github.com/anesis-dev/anesis/releases/download";
+const RELEASES_API_URL: &str = "https://api.github.com/repos/anesis-dev/anesis-cli/releases/latest";
+const RELEASES_DOWNLOAD_BASE_URL: &str =
+  "https://github.com/anesis-dev/anesis-cli/releases/download";
 
 #[derive(Debug, Deserialize)]
 struct LatestReleaseResponse {
@@ -77,6 +79,29 @@ pub async fn upgrade_cli(ctx: &AppContext) -> Result<()> {
     .bytes()
     .await
     .with_context(|| format!("Failed to read the downloaded Anesis v{latest_version} archive"))
+    .inspect_err(|_| sp.finish_and_clear())?;
+  sp.finish_and_clear();
+
+  let sp = spinner("Verifying checksum...");
+  let checksums_url = release_checksums_url(&latest_version);
+  let checksums = ctx
+    .client
+    .get(&checksums_url)
+    .header(USER_AGENT, github_user_agent())
+    .send()
+    .await
+    .with_context(|| format!("Failed to download release checksums from {checksums_url}"))
+    .inspect_err(|_| sp.finish_and_clear())?
+    .error_for_status()
+    .with_context(|| format!("Release checksums were not available at {checksums_url}"))
+    .inspect_err(|_| sp.finish_and_clear())?
+    .text()
+    .await
+    .context("Failed to read the release checksums")
+    .inspect_err(|_| sp.finish_and_clear())?;
+
+  let asset_name = asset_filename(platform);
+  verify_asset_checksum(&archive_bytes, &checksums, &asset_name)
     .inspect_err(|_| sp.finish_and_clear())?;
   sp.finish_and_clear();
 
@@ -166,29 +191,19 @@ fn write_version_check_cache(path: &Path, cache: &VersionCheckCache) -> Result<(
   Ok(())
 }
 
-fn parse_version(version: &str) -> Result<(u64, u64, u64)> {
-  let mut parts = version.split('.');
-  let major = parse_version_component(parts.next(), "major", version)?;
-  let minor = parse_version_component(parts.next(), "minor", version)?;
-  let patch = parse_version_component(parts.next(), "patch", version)?;
-  if parts.next().is_some() {
-    return Err(anyhow!("Unsupported version format '{version}'"));
-  }
-
-  Ok((major, minor, patch))
+fn parse_version(version: &str) -> Result<semver::Version> {
+  semver::Version::parse(version).with_context(|| format!("Unsupported version format '{version}'"))
 }
 
 #[doc(hidden)]
 pub fn parse_version_for_tests(version: &str) -> Result<(u64, u64, u64)> {
-  parse_version(version)
+  let parsed = parse_version(version)?;
+  Ok((parsed.major, parsed.minor, parsed.patch))
 }
 
-fn parse_version_component(component: Option<&str>, label: &str, version: &str) -> Result<u64> {
-  let component =
-    component.ok_or_else(|| anyhow!("Missing {label} version component in '{version}'"))?;
-  component
-    .parse::<u64>()
-    .with_context(|| format!("Invalid {label} version component in '{version}'"))
+#[doc(hidden)]
+pub fn parse_version_prerelease_for_tests(version: &str) -> Result<String> {
+  Ok(parse_version(version)?.pre.to_string())
 }
 
 fn is_newer_version(current: &str, latest: &str) -> Result<bool> {
@@ -234,8 +249,12 @@ pub fn is_cache_fresh_for_tests(
 fn current_platform() -> Result<&'static str> {
   if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
     Ok("linux-x86_64")
+  } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+    Ok("linux-aarch64")
   } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
     Ok("macos-aarch64")
+  } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+    Ok("macos-x86_64")
   } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
     Ok("windows-x86_64")
   } else {
@@ -332,6 +351,49 @@ fn release_asset_url(version: &str, platform: &str) -> String {
 #[doc(hidden)]
 pub fn release_asset_url_for_tests(version: &str, platform: &str) -> String {
   release_asset_url(version, platform)
+}
+
+fn release_checksums_url(version: &str) -> String {
+  format!("{}/v{version}/SHA256SUMS", releases_download_base_url())
+}
+
+#[doc(hidden)]
+pub fn release_checksums_url_for_tests(version: &str) -> String {
+  release_checksums_url(version)
+}
+
+fn expected_checksum(checksums: &str, asset_name: &str) -> Result<String> {
+  checksums
+    .lines()
+    .find_map(|line| {
+      let mut fields = line.split_whitespace();
+      let hash = fields.next()?;
+      let name = fields.next()?;
+      (name == asset_name).then(|| hash.to_ascii_lowercase())
+    })
+    .ok_or_else(|| anyhow!("No checksum for '{asset_name}' in the release SHA256SUMS"))
+}
+
+fn verify_asset_checksum(bytes: &[u8], checksums: &str, asset_name: &str) -> Result<()> {
+  let expected = expected_checksum(checksums, asset_name)?;
+  let actual = format!("{:x}", Sha256::digest(bytes));
+  if actual != expected {
+    return Err(anyhow!(
+      "Checksum mismatch for '{asset_name}': expected {expected}, got {actual}. \
+       Refusing to install; try again or report this at \
+       https://github.com/anesis-dev/anesis-cli/issues"
+    ));
+  }
+  Ok(())
+}
+
+#[doc(hidden)]
+pub fn verify_asset_checksum_for_tests(
+  bytes: &[u8],
+  checksums: &str,
+  asset_name: &str,
+) -> Result<()> {
+  verify_asset_checksum(bytes, checksums, asset_name)
 }
 
 fn write_temp_binary(current_exe: &Path, binary: &[u8]) -> Result<PathBuf> {

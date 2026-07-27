@@ -5,7 +5,7 @@ pub use anesis::auth::token::is_token_expired_for_tests;
 
 pub use anesis::utils::archive::strip_archive_path_for_tests;
 
-pub use anesis::utils::cleanup::cleanup_incomplete_template_for_tests;
+pub use anesis::utils::cleanup::{prune_empty_parents_for_tests, run_cleanup};
 
 pub use anesis::utils::picker::{match_score_for_tests, smart_match_for_tests, tokenize_for_tests};
 
@@ -20,5 +20,6 @@ pub use anesis::addons::steps::packages::detect_pm_for_tests as addon_detect_pm_
 
 pub use anesis::upgrade::{
   asset_filename_for_tests, is_cache_fresh_for_tests, is_newer_version_for_tests,
-  normalize_version_tag_for_tests, parse_version_for_tests, release_asset_url_for_tests,
+  normalize_version_tag_for_tests, parse_version_for_tests, parse_version_prerelease_for_tests,
+  release_asset_url_for_tests, release_checksums_url_for_tests, verify_asset_checksum_for_tests,
 };

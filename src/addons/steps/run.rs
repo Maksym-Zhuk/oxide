@@ -14,6 +14,7 @@ pub fn execute_run(
   project_root: &Path,
   ctx: &tera::Context,
   non_interactive: bool,
+  allow_run: bool,
 ) -> Result<Vec<Rollback>> {
   let command = super::render_string(&step.command, ctx)?;
 
@@ -21,17 +22,25 @@ pub fn execute_run(
     println!("  {}", step.description.dimmed());
   }
   println!("  {} {}", "will run:".dimmed(), command.yellow());
-  if !non_interactive
-    && !Confirm::new("Run this command?")
+
+  if !allow_run {
+    if non_interactive {
+      bail!(
+        "this addon wants to run a shell command, and there is nobody to ask:\n  {command}\n\n\
+         Re-run with --allow-run (or set ANESIS_ALLOW_RUN=1) if you trust this addon. \
+         `--yes` deliberately does not cover shell execution."
+      );
+    }
+
+    if !Confirm::new("Run this command?")
       .with_default(false)
       .prompt()?
-  {
-    bail!("run step declined: '{command}'");
+    {
+      bail!("run step declined: '{command}'");
+    }
   }
 
-  let status = Command::new("sh")
-    .arg("-c")
-    .arg(&command)
+  let status = shell_command(&command)
     .current_dir(project_root)
     .status()
     .with_context(|| format!("failed to launch shell for '{command}'"))?;
@@ -40,4 +49,18 @@ pub fn execute_run(
   }
 
   Ok(vec![Rollback::IrreversibleRun { command }])
+}
+
+#[cfg(windows)]
+fn shell_command(command: &str) -> Command {
+  let mut cmd = Command::new("cmd");
+  cmd.arg("/C").arg(command);
+  cmd
+}
+
+#[cfg(not(windows))]
+fn shell_command(command: &str) -> Command {
+  let mut cmd = Command::new("sh");
+  cmd.arg("-c").arg(command);
+  cmd
 }

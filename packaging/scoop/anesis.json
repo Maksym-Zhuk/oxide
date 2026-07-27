@@ -1,0 +1,26 @@
+{
+  "version": "{{VERSION}}",
+  "description": "Scaffold projects from remote templates and extend them with addons",
+  "homepage": "https://anesis-dev.vercel.app",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/anesis-dev/anesis-cli/releases/download/v{{VERSION}}/anesis-windows-x86_64.zip",
+      "hash": "{{SHA256_WINDOWS_X86_64}}"
+    }
+  },
+  "bin": "anesis.exe",
+  "checkver": {
+    "github": "https://github.com/anesis-dev/anesis-cli"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/anesis-dev/anesis-cli/releases/download/v$version/anesis-windows-x86_64.zip"
+      }
+    },
+    "hash": {
+      "url": "https://github.com/anesis-dev/anesis-cli/releases/download/v$version/SHA256SUMS"
+    }
+  }
+}

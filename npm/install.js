@@ -2,6 +2,7 @@
 "use strict";
 
 const https = require("https");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
@@ -11,6 +12,7 @@ const PLATFORM_MAP = {
 	"linux-x64": { name: "linux-x86_64", ext: "tar.gz", binary: "anesis" },
 	"linux-arm64": { name: "linux-aarch64", ext: "tar.gz", binary: "anesis" },
 	"darwin-arm64": { name: "macos-aarch64", ext: "tar.gz", binary: "anesis" },
+	"darwin-x64": { name: "macos-x86_64", ext: "tar.gz", binary: "anesis" },
 	"win32-x64": { name: "windows-x86_64", ext: "zip", binary: "anesis.exe" },
 };
 
@@ -19,8 +21,8 @@ const platform = PLATFORM_MAP[key];
 if (!platform) {
 	console.error(
 		`anesis: unsupported platform "${key}". ` +
-			`Supported via npm: linux-x64, linux-arm64, darwin-arm64, win32-x64. ` +
-			`Install manually from https://github.com/anesis-dev/anesis/releases`,
+			`Supported via npm: linux-x64, linux-arm64, darwin-arm64, darwin-x64, win32-x64. ` +
+			`Install manually from https://github.com/anesis-dev/anesis-cli/releases`,
 	);
 	process.exit(1);
 }
@@ -45,7 +47,9 @@ if (
 fs.mkdirSync(binDir, { recursive: true });
 
 const assetName = `anesis-${platform.name}.${platform.ext}`;
-const url = `https://github.com/anesis-dev/anesis/releases/download/v${version}/${assetName}`;
+const releaseBaseUrl = `https://github.com/anesis-dev/anesis-cli/releases/download/v${version}`;
+const url = `${releaseBaseUrl}/${assetName}`;
+const sumsUrl = `${releaseBaseUrl}/SHA256SUMS`;
 
 console.log(`anesis: downloading ${url}`);
 
@@ -145,23 +149,54 @@ function extractZip(buf, destPath) {
 	throw new Error("anesis.exe not found in ZIP archive");
 }
 
+function verifyChecksum(buf, sumsBuf) {
+	const line = sumsBuf
+		.toString("utf8")
+		.split("\n")
+		.map((l) => l.trim())
+		.find((l) => l.split(/\s+/)[1] === assetName);
+	if (!line) {
+		throw new Error(`no checksum for ${assetName} in SHA256SUMS`);
+	}
+	const expected = line.split(/\s+/)[0].toLowerCase();
+	const actual = crypto.createHash("sha256").update(buf).digest("hex");
+	if (expected !== actual) {
+		throw new Error(
+			`checksum mismatch for ${assetName}: expected ${expected}, got ${actual}`,
+		);
+	}
+	console.log("anesis: checksum verified");
+}
+
 download(url, (err, buf) => {
 	if (err) {
 		console.error(`anesis: download failed: ${err.message}`);
 		process.exit(1);
 	}
-	try {
-		if (platform.ext === "tar.gz") {
-			extractTarGz(buf, dest);
-		} else {
-			extractZip(buf, dest);
+	download(sumsUrl, (sumsErr, sumsBuf) => {
+		if (sumsErr) {
+			console.error(`anesis: SHA256SUMS download failed: ${sumsErr.message}`);
+			process.exit(1);
 		}
-		fs.writeFileSync(versionFile, version);
-		installCompletions(dest);
-	} catch (e) {
-		console.error(`anesis: extraction failed: ${e.message}`);
-		process.exit(1);
-	}
+		try {
+			verifyChecksum(buf, sumsBuf);
+		} catch (e) {
+			console.error(`anesis: ${e.message}`);
+			process.exit(1);
+		}
+		try {
+			if (platform.ext === "tar.gz") {
+				extractTarGz(buf, dest);
+			} else {
+				extractZip(buf, dest);
+			}
+			fs.writeFileSync(versionFile, version);
+			installCompletions(dest);
+		} catch (e) {
+			console.error(`anesis: extraction failed: ${e.message}`);
+			process.exit(1);
+		}
+	});
 });
 
 function installCompletions(binaryPath) {

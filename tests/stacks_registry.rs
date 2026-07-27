@@ -1,4 +1,7 @@
-use anesis::stacks::{manifest::StackManifest, registry::CatalogStack};
+use anesis::stacks::{
+  manifest::{Author, StackManifest},
+  registry::CatalogStack,
+};
 use anesis::utils::picker::ItemKind;
 
 fn manifest() -> StackManifest {
@@ -7,6 +10,11 @@ fn manifest() -> StackManifest {
     id: "s".into(),
     name: "S".into(),
     description: String::new(),
+    version: "1.0.0".into(),
+    author: Author {
+      name: "Maksym Zhuk".into(),
+      github: "anesis-dev".into(),
+    },
     template: "nest-express".into(),
     addons: Vec::new(),
   }

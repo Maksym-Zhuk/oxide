@@ -71,7 +71,17 @@ fn resolve_fixture(ctx: &AppContext, addon_id: &str, project: Option<String>) ->
 }
 
 fn show_diff(baseline: &Path, work: &Path) {
-  match Command::new("diff")
+  let Ok(diff) = which::which("diff") else {
+    eprintln!(
+      "('diff' was not found on PATH; cannot show changes. \
+       On Windows, install Git for Windows or run this inside WSL.)"
+    );
+    eprintln!("  baseline: {}", baseline.display());
+    eprintln!("  after:    {}", work.display());
+    return;
+  };
+
+  match Command::new(diff)
     .arg("-ruN")
     .arg("-x")
     .arg("anesis.lock")

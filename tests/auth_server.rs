@@ -1,67 +1,61 @@
-use std::sync::OnceLock;
+use anesis::auth::server::{CALLBACK_PORTS, User, bind_local_auth_server, serve_local_auth_server};
 
-use anesis::auth::server::run_local_auth_server;
-use tokio::sync::{Mutex, MutexGuard};
+async fn start(state: &str) -> (u16, tokio::task::JoinHandle<anyhow::Result<User>>) {
+  let bound = bind_local_auth_server(state.to_string(), "http://localhost:3000")
+    .await
+    .expect("a callback port should be free");
+  let port = bound.port();
+  let handle = tokio::spawn(async move { serve_local_auth_server(bound).await });
+  (port, handle)
+}
 
-static PORT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+fn client() -> reqwest::Client {
+  reqwest::Client::builder()
+    .redirect(reqwest::redirect::Policy::none())
+    .build()
+    .unwrap()
+}
 
-async fn acquire_port() -> MutexGuard<'static, ()> {
-  PORT_LOCK.get_or_init(|| Mutex::new(())).lock().await
+async fn get(port: u16, query: &[(&str, &str)]) -> reqwest::Response {
+  let url = format!("http://127.0.0.1:{port}/callback");
+  for _ in 0..50 {
+    match client().get(&url).query(query).send().await {
+      Ok(response) => return response,
+      Err(_) => tokio::time::sleep(std::time::Duration::from_millis(20)).await,
+    }
+  }
+  panic!("callback listener on port {port} never came up");
 }
 
 #[tokio::test]
 async fn callback_with_valid_state_returns_user() {
-  let _lock = acquire_port().await;
-  let state = "validstate0000000000000000000000".to_string();
-  let state_clone = state.clone();
+  let state = "validstate0000000000000000000000";
+  let (port, handle) = start(state).await;
 
-  let server_handle =
-    tokio::spawn(async move { run_local_auth_server(state_clone, "http://localhost:3000").await });
-
-  tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-
-  let client = reqwest::Client::builder()
-    .redirect(reqwest::redirect::Policy::none())
-    .build()
-    .unwrap();
-
-  client
-    .get("http://127.0.0.1:8080/callback")
-    .query(&[
-      ("state", state.as_str()),
+  get(
+    port,
+    &[
+      ("state", state),
       ("token", "secret-token"),
       ("name", "testuser"),
-    ])
-    .send()
-    .await
-    .unwrap();
+    ],
+  )
+  .await;
 
-  let user = server_handle.await.unwrap().unwrap();
+  let user = handle.await.unwrap().unwrap();
   assert_eq!(user.token, "secret-token");
   assert_eq!(user.name, "testuser");
 }
 
 #[tokio::test]
 async fn callback_with_invalid_state_redirects_to_error() {
-  let _lock = acquire_port().await;
-  let state = "correctstate00000000000000000000".to_string();
+  let (port, handle) = start("correctstate00000000000000000000").await;
 
-  let server_handle =
-    tokio::spawn(async move { run_local_auth_server(state, "http://localhost:3000").await });
-
-  tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-
-  let client = reqwest::Client::builder()
-    .redirect(reqwest::redirect::Policy::none())
-    .build()
-    .unwrap();
-
-  let res = client
-    .get("http://127.0.0.1:8080/callback")
-    .query(&[("state", "wrongstate"), ("token", "tok"), ("name", "user")])
-    .send()
-    .await
-    .unwrap();
+  let res = get(
+    port,
+    &[("state", "wrongstate"), ("token", "tok"), ("name", "user")],
+  )
+  .await;
 
   let location = res
     .headers()
@@ -73,29 +67,14 @@ async fn callback_with_invalid_state_redirects_to_error() {
     "expected invalid_state redirect, got: {location}"
   );
 
-  server_handle.abort();
+  handle.abort();
 }
 
 #[tokio::test]
 async fn callback_without_state_redirects_to_error() {
-  let _lock = acquire_port().await;
-  let server_handle = tokio::spawn(async move {
-    run_local_auth_server("somestate".to_string(), "http://localhost:3000").await
-  });
+  let (port, handle) = start("somestate").await;
 
-  tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-
-  let client = reqwest::Client::builder()
-    .redirect(reqwest::redirect::Policy::none())
-    .build()
-    .unwrap();
-
-  let res = client
-    .get("http://127.0.0.1:8080/callback")
-    .query(&[("token", "tok"), ("name", "user")])
-    .send()
-    .await
-    .unwrap();
+  let res = get(port, &[("token", "tok"), ("name", "user")]).await;
 
   let location = res
     .headers()
@@ -107,5 +86,38 @@ async fn callback_without_state_redirects_to_error() {
     "expected missing_state redirect, got: {location}"
   );
 
-  server_handle.abort();
+  handle.abort();
+}
+
+#[tokio::test]
+async fn a_second_listener_falls_back_to_the_next_port() {
+  let first = bind_local_auth_server("a".repeat(32), "http://localhost:3000")
+    .await
+    .unwrap();
+  let second = bind_local_auth_server("b".repeat(32), "http://localhost:3000")
+    .await
+    .unwrap();
+
+  assert_ne!(
+    first.port(),
+    second.port(),
+    "two listeners must not claim the same port"
+  );
+  for listener in [&first, &second] {
+    assert!(
+      CALLBACK_PORTS.contains(&listener.port()),
+      "port {} is outside the advertised range",
+      listener.port()
+    );
+  }
+}
+
+#[test]
+fn every_callback_port_is_unprivileged_and_distinct() {
+  assert!(CALLBACK_PORTS.iter().all(|&p| p >= 1024));
+
+  let mut sorted = CALLBACK_PORTS.to_vec();
+  sorted.sort_unstable();
+  sorted.dedup();
+  assert_eq!(sorted.len(), CALLBACK_PORTS.len(), "ports must be distinct");
 }

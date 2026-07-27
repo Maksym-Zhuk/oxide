@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::{
   auth::token::get_auth_user,
-  context::AppContext,
+  context::{AppContext, CleanupTask},
   utils::{archive::download_and_extract, errors::classify_reqwest_error, ui::spinner},
 };
 
@@ -16,6 +16,9 @@ use super::{
 };
 
 pub async fn record_addon_use(ctx: &AppContext, addon_id: &str) {
+  if !ctx.telemetry {
+    return;
+  }
   let Ok(user) = get_auth_user(&ctx.paths.auth) else {
     return;
   };
@@ -183,7 +186,11 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
 
   {
     let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
-    *guard = Some(addon_dir.clone());
+    *guard = Some(CleanupTask::PartialDownload {
+      path: addon_dir.clone(),
+      prune_root: ctx.paths.addons.clone(),
+      label: "addon",
+    });
   }
 
   if install_state == InstallState::Update && addon_dir.exists() {
@@ -231,6 +238,8 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
 
   let manifest: AddonManifest = serde_json::from_str(&content)
     .with_context(|| format!("Failed to parse anesis.addon.json for addon '{addon_id}'"))?;
+
+  crate::compat::check_schema_version("addon", addon_id, &manifest.schema_version)?;
 
   update_addons_cache(addons_dir, addon_id, &manifest, &info.commit_sha)
     .with_context(|| format!("Failed to update addons cache after installing '{addon_id}'"))?;

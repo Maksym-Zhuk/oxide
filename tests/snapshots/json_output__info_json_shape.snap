@@ -1,0 +1,20 @@
+---
+source: tests/json_output.rs
+expression: "cli.json(&[\"info\", \"--json\"])"
+---
+{
+  "account": null,
+  "backend": "https://anesis-server.onrender.com",
+  "installed": {
+    "addons": 0,
+    "templates": 0
+  },
+  "logged_in": false,
+  "paths": {
+    "addons_cache": "[addons_cache]",
+    "auth": "[auth]",
+    "home": "[home]",
+    "templates_cache": "[templates_cache]"
+  },
+  "version": "[version]"
+}

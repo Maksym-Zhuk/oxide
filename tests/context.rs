@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use anesis::context::{AppContext, CleanupState};
+use anesis::context::{AppContext, CleanupState, CleanupTask};
 use anesis::paths::AnesisPaths;
 use assert_fs::TempDir;
 use reqwest::Client;
@@ -56,10 +56,71 @@ fn cleanup_state_is_shared_via_arc() {
   let cleanup_state: CleanupState = Arc::new(Mutex::new(None));
   let ctx = AppContext::new(make_paths(&tmp), Client::new(), cleanup_state.clone());
 
-  *cleanup_state.lock().unwrap() = Some(tmp.path().join("in-progress"));
+  let in_progress = tmp.path().join("in-progress");
+  *cleanup_state.lock().unwrap() = Some(CleanupTask::PartialProject {
+    path: in_progress.clone(),
+  });
 
-  assert_eq!(
-    ctx.cleanup_state.lock().unwrap().as_deref(),
-    Some(tmp.path().join("in-progress").as_path())
+  let observed = ctx.cleanup_state.lock().unwrap();
+  match observed.as_ref() {
+    Some(CleanupTask::PartialProject { path }) => assert_eq!(path, &in_progress),
+    other => panic!(
+      "expected the registered project task to be visible through the context, got {}",
+      match other {
+        Some(_) => "a different task",
+        None => "nothing",
+      }
+    ),
+  }
+}
+
+#[test]
+fn cli_flags_only_tighten_the_defaults() {
+  let tmp = TempDir::new().unwrap();
+  let make = || {
+    AppContext::new(
+      make_paths(&tmp),
+      Client::new(),
+      Arc::new(Mutex::new(None)) as CleanupState,
+    )
+  };
+
+  let base = make();
+  assert!(base.telemetry, "install counts are reported by default");
+  assert!(
+    !base.allow_run,
+    "remote shell execution must be opt-in, not opt-out"
   );
+
+  let opted_out = make().with_cli_flags(true, false);
+  assert!(!opted_out.telemetry);
+  assert!(!opted_out.allow_run);
+
+  let permissive = make().with_cli_flags(false, true);
+  assert!(permissive.telemetry);
+  assert!(permissive.allow_run);
+}
+
+#[test]
+fn env_flags_treat_falsey_values_as_unset() {
+  use anesis::context::env_flag_for_tests;
+
+  for value in ["0", "false", "no", "off", "OFF", " ", ""] {
+    unsafe { std::env::set_var("ANESIS_TEST_FLAG", value) };
+    assert!(
+      !env_flag_for_tests("ANESIS_TEST_FLAG"),
+      "{value:?} should read as unset"
+    );
+  }
+
+  for value in ["1", "true", "yes", "anything"] {
+    unsafe { std::env::set_var("ANESIS_TEST_FLAG", value) };
+    assert!(
+      env_flag_for_tests("ANESIS_TEST_FLAG"),
+      "{value:?} should read as set"
+    );
+  }
+
+  unsafe { std::env::remove_var("ANESIS_TEST_FLAG") };
+  assert!(!env_flag_for_tests("ANESIS_TEST_FLAG"));
 }

@@ -1,0 +1,13 @@
+---
+source: tests/json_output.rs
+expression: "cli.json(&[\"template\", \"list\", \"--json\"])"
+---
+[
+  {
+    "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+    "name": "react-vite-ts",
+    "path": "react-vite-ts",
+    "source": "https://github.com/anesis-dev/templates",
+    "version": "0.2.0"
+  }
+]

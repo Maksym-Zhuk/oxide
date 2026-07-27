@@ -1,10 +1,12 @@
 pub mod addons;
 pub mod auth;
 pub mod cli;
+pub mod compat;
 pub mod completions;
 pub mod config;
 pub mod context;
 pub mod info;
+pub mod man;
 pub mod manifest;
 pub mod mcp;
 pub mod paths;

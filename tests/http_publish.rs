@@ -2,10 +2,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anesis::{
-  addons::{publish::publish_addon, update::update_addon},
+  addons::{publish::publish_addon, republish::republish_addon},
   context::AppContext,
   paths::AnesisPaths,
-  templates::{publish::publish, update::update},
+  templates::{publish::publish, republish::republish},
   utils::errors::AnesisError,
 };
 use assert_fs::TempDir;
@@ -47,11 +47,11 @@ async fn template_publish_fails_when_not_logged_in() {
 }
 
 #[tokio::test]
-async fn template_update_fails_when_not_logged_in() {
+async fn template_republish_fails_when_not_logged_in() {
   let tmp = TempDir::new().unwrap();
   let ctx = make_ctx_without_auth(&tmp);
 
-  let err = update(&ctx, "https://github.com/owner/repo", None, None, None)
+  let err = republish(&ctx, "https://github.com/owner/repo", None, None, None)
     .await
     .unwrap_err();
   assert!(
@@ -79,11 +79,11 @@ async fn addon_publish_fails_when_not_logged_in() {
 }
 
 #[tokio::test]
-async fn addon_update_fails_when_not_logged_in() {
+async fn addon_republish_fails_when_not_logged_in() {
   let tmp = TempDir::new().unwrap();
   let ctx = make_ctx_without_auth(&tmp);
 
-  let err = update_addon(&ctx, "https://github.com/owner/addon", None, None, None)
+  let err = republish_addon(&ctx, "https://github.com/owner/addon", None, None, None)
     .await
     .unwrap_err();
   assert!(
@@ -108,9 +108,9 @@ fn publish_template_dto_serializes_url() {
 }
 
 #[test]
-fn update_template_dto_serializes_url() {
-  use anesis::templates::update::UpdateTemplateDto;
-  let dto = UpdateTemplateDto {
+fn republish_template_dto_serializes_url() {
+  use anesis::templates::republish::RepublishTemplateDto;
+  let dto = RepublishTemplateDto {
     url: "https://github.com/owner/repo".to_string(),
     visibility: None,
     repo_credential_id: None,
@@ -149,9 +149,9 @@ fn publish_template_dto_includes_visibility_when_set() {
 }
 
 #[test]
-fn update_template_dto_omits_none_fields() {
-  use anesis::templates::update::UpdateTemplateDto;
-  let dto = UpdateTemplateDto {
+fn republish_template_dto_omits_none_fields() {
+  use anesis::templates::republish::RepublishTemplateDto;
+  let dto = RepublishTemplateDto {
     url: "https://github.com/owner/repo".to_string(),
     visibility: None,
     repo_credential_id: None,

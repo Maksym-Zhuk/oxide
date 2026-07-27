@@ -1,0 +1,92 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://anesis-server.onrender.com/schema/anesis.stack.schema.json",
+	"title": "Anesis Stack Configuration",
+	"description": "Strict validation schema for Anesis CLI stacks",
+	"type": "object",
+	"additionalProperties": false,
+
+	"required": ["schema_version", "id", "name", "version", "author", "template"],
+
+	"properties": {
+		"$schema": {
+			"type": "string",
+			"format": "uri"
+		},
+
+		"schema_version": {
+			"type": "string",
+			"const": "1"
+		},
+
+		"id": {
+			"type": "string",
+			"pattern": "^[a-z0-9-]+$",
+			"minLength": 2,
+			"maxLength": 60
+		},
+
+		"name": {
+			"type": "string",
+			"minLength": 2,
+			"maxLength": 80
+		},
+
+		"description": {
+			"type": "string",
+			"minLength": 10,
+			"maxLength": 300
+		},
+
+		"version": {
+			"type": "string",
+			"pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+		},
+
+		"author": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["name", "github"],
+			"properties": {
+				"name": { "type": "string", "minLength": 1 },
+				"github": { "type": "string", "minLength": 1 }
+			}
+		},
+
+		"template": {
+			"type": "string",
+			"pattern": "^[a-z0-9-]+$",
+			"minLength": 2,
+			"maxLength": 40
+		},
+
+		"addons": {
+			"type": "array",
+			"items": { "$ref": "#/$defs/stackAddonRef" }
+		}
+	},
+
+	"$defs": {
+		"stackAddonRef": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^[a-z0-9-]+$",
+					"minLength": 2,
+					"maxLength": 60
+				},
+				"command": {
+					"type": "string",
+					"default": "install"
+				},
+				"inputs": {
+					"type": "object",
+					"additionalProperties": { "type": "string" }
+				}
+			}
+		}
+	}
+}
