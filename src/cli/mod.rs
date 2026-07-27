@@ -6,6 +6,7 @@ use commands::Commands;
 #[derive(Parser)]
 #[command(
   name = "anesis",
+  bin_name = "anesis",
   version,
   about = "Scaffold projects from remote templates and extend them with addons",
   long_about = "Anesis scaffolds a project from a template, then layers reusable addons \
