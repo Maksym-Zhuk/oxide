@@ -103,7 +103,7 @@ version-check cache. Inside a scaffolded project, applied addons are tracked in
 | `ANESIS_FRONTEND_URL` | `https://anesis-dev.vercel.app` | Web app used for login redirects. |
 | `ANESIS_TOKEN` | — | Personal access token, for CI. Skips `anesis login`. |
 | `ANESIS_NO_TELEMETRY` | unset | Set to disable install-count reporting (see below). |
-| `ANESIS_ALLOW_RUN` | unset | Set to permit addon `run` steps without a prompt (see below). |
+| `ANESIS_ALLOW_RUN` | unset | Set to permit addon `run`/`packages` steps without a prompt (see below). |
 | `ANESIS_DEBUG` | unset | Full error chains and panic backtraces instead of friendly messages. |
 | `ANESIS_RELEASES_API_URL` | GitHub releases API | Override for `anesis upgrade`; mainly for testing. |
 | `ANESIS_RELEASES_DOWNLOAD_BASE_URL` | GitHub releases downloads | Override for `anesis upgrade`; mainly for testing. |
@@ -130,12 +130,14 @@ export ANESIS_NO_TELEMETRY=1        # or set it once for the whole shell
 
 ## Running remote code
 
-Addons can contain `run` steps — arbitrary shell commands that come from a
-registry entry, not from you. Anesis asks before each one.
+Addons can contain `run` steps (arbitrary shell commands) and `packages` steps
+(package manager installs, which run the installed packages' own lifecycle
+scripts) — both come from a registry entry, not from you. Anesis asks before
+each one.
 
 `--yes` does **not** cover this. Skipping the prompt requires `--allow-run` (or
-`ANESIS_ALLOW_RUN=1`) so that "accept the defaults" and "execute shell commands
-someone else wrote" stay separate decisions. This matters most for `--stack` and
+`ANESIS_ALLOW_RUN=1`) so that "accept the defaults" and "execute code someone
+else wrote" stay separate decisions. This matters most for `--stack` and
 for `anesis mcp`, where an AI agent drives the CLI and there is nobody to ask.
 
 The full trust model is in [SECURITY.md](SECURITY.md).

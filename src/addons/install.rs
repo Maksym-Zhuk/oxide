@@ -236,10 +236,8 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
     )
   })?;
 
-  let manifest: AddonManifest = serde_json::from_str(&content)
+  let manifest: AddonManifest = super::manifest::parse(&content)
     .with_context(|| format!("Failed to parse anesis.addon.json for addon '{addon_id}'"))?;
-
-  crate::compat::check_schema_version("addon", addon_id, &manifest.schema_version)?;
 
   update_addons_cache(addons_dir, addon_id, &manifest, &info.commit_sha)
     .with_context(|| format!("Failed to update addons cache after installing '{addon_id}'"))?;
@@ -279,6 +277,6 @@ pub fn read_cached_manifest(addons_dir: &Path, addon_id: &str) -> Result<AddonMa
       manifest_path.display()
     )
   })?;
-  serde_json::from_str(&content)
+  super::manifest::parse(&content)
     .with_context(|| format!("Failed to parse manifest for addon '{addon_id}'"))
 }

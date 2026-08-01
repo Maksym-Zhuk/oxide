@@ -70,6 +70,14 @@ pub fn update_templates_cache(
 
   crate::compat::check_anesis_version(&template_info.name, &template_info.anesis_version)?;
 
+  let requested_name = path.to_string_lossy();
+  anyhow::ensure!(
+    template_info.name == requested_name,
+    "template '{requested_name}' was installed, but its manifest declares a different name \
+     ('{}'); refusing to cache it to avoid a directory/name mismatch",
+    template_info.name
+  );
+
   let templates_json = template_path.join("anesis-templates.json");
   let mut templates_info: TemplatesCache = if templates_json.exists() {
     let content = fs::read_to_string(&templates_json)?;

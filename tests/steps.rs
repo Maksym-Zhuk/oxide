@@ -3,12 +3,13 @@ mod common;
 use anesis::addons::{
   manifest::{
     AppendStep, CopyStep, CreateStep, DeleteStep, IfExists, IfNotFound, InjectStep, MoveStep,
-    RenameStep, ReplaceStep, RunStep, Target,
+    PackagesStep, RenameStep, ReplaceStep, RunStep, Target,
   },
   steps::{
     Rollback, append::execute_append, copy::execute_copy, create::execute_create,
     delete::execute_delete, inject::execute_inject, move_step::execute_move,
-    rename::execute_rename, render_string, replace::execute_replace, run::execute_run,
+    packages::execute_packages, rename::execute_rename, render_string, replace::execute_replace,
+    run::execute_run,
   },
 };
 use assert_fs::prelude::*;
@@ -821,7 +822,7 @@ fn copy_binary_file_preserves_bytes() {
 
 #[cfg(unix)]
 #[test]
-fn copy_preserves_executable_bit() {
+fn copy_does_not_propagate_executable_bit() {
   use std::os::unix::fs::PermissionsExt;
 
   let addon_dir = assert_fs::TempDir::new().unwrap();
@@ -850,7 +851,48 @@ fn copy_preserves_executable_bit() {
     .unwrap()
     .permissions()
     .mode();
-  assert_eq!(mode & 0o111, 0o111);
+  assert_eq!(
+    mode & 0o111,
+    0,
+    "copy must never make the destination executable"
+  );
+}
+
+#[test]
+fn copy_without_render_does_not_propagate_executable_bit() {
+  use std::os::unix::fs::PermissionsExt;
+
+  let addon_dir = assert_fs::TempDir::new().unwrap();
+  let project_dir = assert_fs::TempDir::new().unwrap();
+  let src = addon_dir.child("run.sh");
+  src.write_binary(b"#!/bin/sh\necho hi").unwrap();
+  std::fs::set_permissions(src.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+  let step = CopyStep {
+    src: "run.sh".into(),
+    dest: "run.sh".into(),
+    if_exists: IfExists::Overwrite,
+    render: false,
+  };
+
+  execute_copy(
+    &step,
+    addon_dir.path(),
+    project_dir.path(),
+    &empty_ctx(),
+    false,
+  )
+  .unwrap();
+
+  let mode = std::fs::metadata(project_dir.path().join("run.sh"))
+    .unwrap()
+    .permissions()
+    .mode();
+  assert_eq!(
+    mode & 0o111,
+    0,
+    "copy must never make the destination executable"
+  );
 }
 
 #[test]
@@ -894,6 +936,61 @@ fn create_path_traversal_blocked() {
     if_exists: IfExists::Overwrite,
   };
   assert!(execute_create(&step, dir.path(), &empty_ctx(), false).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn create_target_that_is_a_dangling_symlink_is_blocked() {
+  use std::os::unix::fs::symlink;
+
+  let dir = assert_fs::TempDir::new().unwrap();
+  let outside = assert_fs::TempDir::new().unwrap();
+  let outside_target = outside.path().join("pwned");
+
+  symlink(&outside_target, dir.path().join("hook")).unwrap();
+  assert!(
+    !outside_target.exists(),
+    "sanity check: the symlink must be dangling"
+  );
+
+  let step = CreateStep {
+    path: "hook".into(),
+    content: "evil".into(),
+    if_exists: IfExists::Overwrite,
+  };
+  let result = execute_create(&step, dir.path(), &empty_ctx(), false);
+
+  assert!(result.is_err(), "dangling symlink escape must be blocked");
+  assert!(
+    !outside_target.exists(),
+    "the write must not have followed the symlink outside the project root"
+  );
+}
+
+#[cfg(unix)]
+#[test]
+fn create_under_dangling_symlink_directory_is_blocked() {
+  use std::os::unix::fs::symlink;
+
+  let dir = assert_fs::TempDir::new().unwrap();
+  let outside = assert_fs::TempDir::new().unwrap();
+  let outside_dir = outside.path().join("pwned-dir");
+
+  symlink(&outside_dir, dir.path().join("scripts")).unwrap();
+  assert!(
+    !outside_dir.exists(),
+    "sanity check: the symlink must be dangling"
+  );
+
+  let step = CreateStep {
+    path: "scripts/new-file.txt".into(),
+    content: "evil".into(),
+    if_exists: IfExists::Overwrite,
+  };
+  let result = execute_create(&step, dir.path(), &empty_ctx(), false);
+
+  assert!(result.is_err(), "dangling symlink escape must be blocked");
+  assert!(!outside_dir.exists());
 }
 
 #[test]
@@ -1175,4 +1272,37 @@ fn run_executes_non_interactively_once_allow_run_is_given() {
   execute_run(&step, dir.path(), &empty_ctx(), true, true).unwrap();
 
   assert!(dir.path().join("allowed.txt").exists());
+}
+
+#[test]
+fn packages_step_is_refused_non_interactively_without_allow_run() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("package.json").write_str("{}").unwrap();
+
+  let step = PackagesStep {
+    dependencies: vec!["left-pad".to_string()],
+    dev_dependencies: vec![],
+  };
+
+  let err = execute_packages(&step, dir.path(), true, false)
+    .expect_err("a non-interactive packages step must not execute without --allow-run");
+
+  assert!(
+    err.to_string().contains("--allow-run"),
+    "the error should say how to opt in: {err}"
+  );
+}
+
+#[test]
+fn packages_step_with_no_dependencies_is_a_noop_even_without_allow_run() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("package.json").write_str("{}").unwrap();
+
+  let step = PackagesStep {
+    dependencies: vec![],
+    dev_dependencies: vec![],
+  };
+
+  let rollbacks = execute_packages(&step, dir.path(), true, false).unwrap();
+  assert!(rollbacks.is_empty());
 }

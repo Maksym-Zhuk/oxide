@@ -70,10 +70,17 @@ impl Cli {
   "name": "react-vite-ts",
   "version": "0.2.0",
   "anesisVersion": ">=1.0.0",
+  "author": { "name": "Anesis", "github": "anesis-dev" },
   "repository": { "url": "https://github.com/anesis-dev/templates" },
+  "specialization": "frontend",
+  "scope": "web",
+  "technologies": ["react", "vite"],
+  "languages": ["typescript"],
+  "type": "base",
   "metadata": {
     "displayName": "React + Vite (TypeScript)",
-    "description": "A React SPA scaffolded with Vite."
+    "description": "A React SPA scaffolded with Vite.",
+    "tags": ["react", "vite", "spa"]
   },
   "inputs": [
     {

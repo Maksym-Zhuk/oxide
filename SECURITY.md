@@ -55,17 +55,19 @@ Two step kinds do more:
   be rolled back — `anesis undo` reports it as an irreversible action and leaves
   its effects in place.
 
-### `run` steps require explicit consent
+### `run` and `packages` steps require explicit consent
 
-Interactively, Anesis prints the exact command and asks before executing it. The
-default answer is **no**.
+Both execute code you did not write: `run` is an arbitrary shell command, and
+`packages` invokes your package manager, which runs the installed packages'
+own lifecycle scripts. Interactively, Anesis prints the exact command and asks
+before executing it. The default answer is **no**.
 
-Non-interactively there is nobody to ask, so a `run` step is **refused** unless
-you pass `--allow-run` or set `ANESIS_ALLOW_RUN=1`:
+Non-interactively there is nobody to ask, so a `run` or `packages` step is
+**refused** unless you pass `--allow-run` or set `ANESIS_ALLOW_RUN=1`:
 
 ```bash
-anesis use some-addon setup --yes                # run steps are refused
-anesis use some-addon setup --yes --allow-run    # run steps execute
+anesis use some-addon setup --yes                # run/packages steps are refused
+anesis use some-addon setup --yes --allow-run    # run/packages steps execute
 ```
 
 `--yes` deliberately does not imply `--allow-run`. "Accept the defaults" and

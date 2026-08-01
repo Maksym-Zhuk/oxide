@@ -5,6 +5,8 @@ pub use anesis::auth::token::is_token_expired_for_tests;
 
 pub use anesis::utils::archive::strip_archive_path_for_tests;
 
+pub use anesis::utils::http::{MAX_TOTAL_PAGES_FOR_TESTS, check_total_pages_for_tests};
+
 pub use anesis::utils::cleanup::{prune_empty_parents_for_tests, run_cleanup};
 
 pub use anesis::utils::picker::{match_score_for_tests, smart_match_for_tests, tokenize_for_tests};
@@ -15,6 +17,7 @@ pub use anesis::templates::install::classify_install_state_for_tests as template
 
 pub use anesis::addons::install::classify_install_state_for_tests as addon_classify_install_state_for_tests;
 pub use anesis::addons::runner::is_newer_for_tests;
+pub use anesis::addons::runner::prune_empty_dirs_for_tests;
 pub use anesis::addons::runner::rerun_prompt_message_for_tests;
 pub use anesis::addons::steps::packages::detect_pm_for_tests as addon_detect_pm_for_tests;
 

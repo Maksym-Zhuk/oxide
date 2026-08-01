@@ -75,6 +75,13 @@ pub fn update_addons_cache(
   manifest: &AddonManifest,
   commit_sha: &str,
 ) -> Result<()> {
+  anyhow::ensure!(
+    manifest.id == subdir,
+    "addon '{subdir}' was installed, but its manifest declares a different id ('{}'); \
+     refusing to cache it to avoid a directory/id mismatch",
+    manifest.id
+  );
+
   let mut cache = read_cache(addons_dir)?;
 
   cache.last_updated = Utc::now().to_rfc3339();

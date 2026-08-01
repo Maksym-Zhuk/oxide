@@ -53,6 +53,7 @@ pub fn load_stack(path: &Path) -> Result<StackManifest> {
 
 pub fn validate(stack: &StackManifest) -> Result<()> {
   crate::compat::check_schema_version("stack", &stack.id, &stack.schema_version)?;
+  crate::utils::validate::validate_registry_id("stack", &stack.id)?;
 
   if stack.template.trim().is_empty() {
     return Err(anyhow!("stack '{}' declares no template", stack.id));

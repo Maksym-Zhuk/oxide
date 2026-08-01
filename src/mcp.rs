@@ -250,7 +250,7 @@ fn tools_list() -> Value {
     },
     {
       "name": "scaffold_project",
-      "description": "Create a new project from a template (or a stack). Non-interactive. Addon 'run' steps are refused unless allow_run is true.",
+      "description": "Create a new project from a template (or a stack). Non-interactive. Addon 'run'/'packages' steps are refused unless allow_run is true.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -258,7 +258,7 @@ fn tools_list() -> Value {
           "template": { "type": "string", "description": "Template name (omit if using a stack)" },
           "stack": { "type": "string", "description": "Stack id (alternative to template)" },
           "inputs": { "type": "object", "description": "Template input values by name", "additionalProperties": true },
-          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps to execute arbitrary shell commands from the registry. Defaults to false; ask the user before setting it." },
+          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps (arbitrary shell) and 'packages' steps (package installs, which run lifecycle scripts) to execute. Defaults to false; ask the user before setting it." },
           "path": { "type": "string", "description": "Working directory to run in (defaults to the server's cwd)" }
         },
         "required": ["name"]
@@ -266,14 +266,14 @@ fn tools_list() -> Value {
     },
     {
       "name": "apply_addon",
-      "description": "Run an addon command in an existing project. Non-interactive. If the command has a 'run' step it will fail unless allow_run is true.",
+      "description": "Run an addon command in an existing project. Non-interactive. If the command has a 'run' or 'packages' step it will fail unless allow_run is true.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "addon_id": { "type": "string" },
           "command": { "type": "string", "description": "Addon command to run" },
           "inputs": { "type": "object", "description": "Addon input values by name", "additionalProperties": true },
-          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps to execute arbitrary shell commands from the registry. Defaults to false; ask the user before setting it." },
+          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps (arbitrary shell) and 'packages' steps (package installs, which run lifecycle scripts) to execute. Defaults to false; ask the user before setting it." },
           "path": { "type": "string", "description": "Project directory to run in" }
         },
         "required": ["addon_id", "command"]
@@ -281,14 +281,14 @@ fn tools_list() -> Value {
     },
     {
       "name": "apply_stack",
-      "description": "Scaffold a new project from a stack (template + ordered addons). Non-interactive. Addon 'run' steps are refused unless allow_run is true.",
+      "description": "Scaffold a new project from a stack (template + ordered addons). Non-interactive. Addon 'run'/'packages' steps are refused unless allow_run is true.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "name": { "type": "string", "description": "Project directory to create" },
           "stack": { "type": "string", "description": "Stack id" },
           "inputs": { "type": "object", "additionalProperties": true },
-          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps to execute arbitrary shell commands from the registry. Defaults to false; ask the user before setting it." },
+          "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps (arbitrary shell) and 'packages' steps (package installs, which run lifecycle scripts) to execute. Defaults to false; ask the user before setting it." },
           "path": { "type": "string", "description": "Working directory to run in" }
         },
         "required": ["name", "stack"]

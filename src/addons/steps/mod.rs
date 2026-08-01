@@ -44,7 +44,7 @@ fn normalize_join(root: &Path, relative: &str) -> PathBuf {
 fn deepest_existing_ancestor(path: &Path) -> PathBuf {
   let mut current = path;
   loop {
-    if current.exists() {
+    if current.symlink_metadata().is_ok() {
       return current.to_path_buf();
     }
     match current.parent() {

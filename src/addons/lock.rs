@@ -1,6 +1,10 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::{
+  collections::HashMap,
+  fs,
+  path::{Path, PathBuf},
+};
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use super::steps::Rollback;
@@ -32,7 +36,44 @@ impl LockFile {
     }
     let contents = fs::read_to_string(&path)?;
     let lock: Self = serde_json::from_str(&contents)?;
+    lock.validate_journal_paths(project_root)?;
     Ok(lock)
+  }
+
+  fn validate_journal_paths(&self, project_root: &Path) -> Result<()> {
+    let canon_root = project_root.canonicalize().with_context(|| {
+      format!(
+        "Cannot resolve project root '{}' while validating anesis.lock",
+        project_root.display()
+      )
+    })?;
+
+    let check = |path: &PathBuf| -> Result<()> {
+      if !path.starts_with(&canon_root) {
+        bail!(
+          "anesis.lock references a path outside the project ('{}') -- refusing to load. \
+           This file may have been tampered with; delete it and re-run the addon install if you trust this project.",
+          path.display()
+        );
+      }
+      Ok(())
+    };
+
+    for entry in &self.addons {
+      for rollback in &entry.journal {
+        match rollback {
+          Rollback::DeleteCreatedFile { path } => check(path)?,
+          Rollback::RestoreFile { path, .. } => check(path)?,
+          Rollback::RenameFile { from, to } => {
+            check(from)?;
+            check(to)?;
+          }
+          Rollback::IrreversibleRun { .. } => {}
+        }
+      }
+    }
+
+    Ok(())
   }
 
   pub fn save(&self, project_root: &Path) -> Result<()> {

@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +54,19 @@ pub struct AddonManifest {
   pub detect: Vec<DetectBlock>,
   #[serde(default)]
   pub variants: Vec<Variant>,
+}
+
+pub fn parse(content: &str) -> Result<AddonManifest> {
+  let manifest: AddonManifest =
+    serde_json::from_str(content).context("Invalid anesis.addon.json structure")?;
+  validate(&manifest)?;
+  Ok(manifest)
+}
+
+pub fn validate(manifest: &AddonManifest) -> Result<()> {
+  crate::compat::check_schema_version("addon", &manifest.id, &manifest.schema_version)?;
+  crate::utils::validate::validate_registry_id("addon", &manifest.id)?;
+  Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]

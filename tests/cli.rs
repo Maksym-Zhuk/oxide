@@ -110,6 +110,24 @@ fn template_publish_missing_arg() {
 }
 
 #[test]
+fn template_publish_rejects_a_non_github_url() {
+  cmd()
+    .args(["template", "publish", "https://gitlab.com/owner/repo"])
+    .assert()
+    .failure()
+    .stderr(contains("GitHub"));
+}
+
+#[test]
+fn template_republish_rejects_a_non_github_url() {
+  cmd()
+    .args(["template", "republish", "https://gitlab.com/owner/repo"])
+    .assert()
+    .failure()
+    .stderr(contains("GitHub"));
+}
+
+#[test]
 fn template_unknown_subcommand() {
   cmd()
     .args(["template", "frobnicate"])

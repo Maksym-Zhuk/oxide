@@ -83,17 +83,46 @@ pub fn classify_reqwest_error(err: reqwest::Error, resource: &str) -> anyhow::Er
     return AnesisError::NetworkTimeout.into();
   }
   if let Some(status) = err.status() {
-    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-      return AnesisError::HttpUnauthorized.into();
-    }
-    if status == reqwest::StatusCode::NOT_FOUND {
-      return AnesisError::HttpNotFound(resource.to_string()).into();
-    }
-    if status.is_server_error() {
-      return AnesisError::HttpServerError(resource.to_string()).into();
-    }
+    return classify_status(status, resource).into();
   }
   anyhow::anyhow!("Network error while fetching {resource}")
+}
+
+fn classify_status(status: reqwest::StatusCode, resource: &str) -> AnesisError {
+  if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+    AnesisError::HttpUnauthorized
+  } else if status == reqwest::StatusCode::NOT_FOUND {
+    AnesisError::HttpNotFound(resource.to_string())
+  } else {
+    AnesisError::HttpServerError(resource.to_string())
+  }
+}
+
+#[derive(serde::Deserialize)]
+struct ServerErrorBody {
+  message: String,
+}
+
+pub async fn check_response(
+  response: reqwest::Response,
+  resource: &str,
+) -> Result<reqwest::Response, anyhow::Error> {
+  if response.status().is_success() {
+    return Ok(response);
+  }
+
+  let status = response.status();
+  let body_text = response.text().await.unwrap_or_default();
+  let server_message = serde_json::from_str::<ServerErrorBody>(&body_text)
+    .ok()
+    .map(|b| b.message)
+    .filter(|m| !m.trim().is_empty());
+
+  let base: anyhow::Error = classify_status(status, resource).into();
+  Err(match server_message {
+    Some(msg) => base.context(msg),
+    None => base,
+  })
 }
 
 pub fn print_error(err: &anyhow::Error) {

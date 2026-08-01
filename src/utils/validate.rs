@@ -78,12 +78,55 @@ pub fn is_valid_github_repo_url(input: &str) -> Result<()> {
   Ok(())
 }
 
+pub fn require_https_url(input: &str, label: &str) -> Result<()> {
+  let url = Url::parse(input).map_err(|_| anyhow!("{label} is not a valid URL: '{input}'"))?;
+  if url.scheme() != "https" {
+    return Err(anyhow!(
+      "{label} must use https, got scheme '{}': '{input}'",
+      url.scheme()
+    ));
+  }
+  Ok(())
+}
+
 pub fn validate_template_name(template_name: &str) -> Result<()> {
   if !VALID_TEMPLATE_NAME.is_match(template_name) {
     anyhow::bail!(
       "Invalid template name '{}'. Allowed characters: a-z, A-Z, 0-9, '-' and '_'",
       template_name
     );
+  }
+
+  Ok(())
+}
+
+pub fn validate_registry_id(kind: &str, id: &str) -> Result<()> {
+  if id.trim().is_empty() {
+    return Err(anyhow!("{kind} id cannot be empty"));
+  }
+
+  if Path::new(id).is_absolute() {
+    return Err(anyhow!(
+      "{kind} id '{id}' must be a relative name, not an absolute path"
+    ));
+  }
+
+  for segment in id.split('/') {
+    if segment.is_empty() {
+      return Err(anyhow!(
+        "{kind} id '{id}' must not contain empty path segments (leading/trailing/double '/')"
+      ));
+    }
+    if segment == "." || segment == ".." {
+      return Err(anyhow!(
+        "{kind} id '{id}' must not contain '.' or '..' path segments"
+      ));
+    }
+    if !VALID_NAME_CHARS.is_match(segment) {
+      return Err(anyhow!(
+        "{kind} id '{id}' segment '{segment}' may only contain letters, numbers, hyphens, underscores, and dots"
+      ));
+    }
   }
 
   Ok(())

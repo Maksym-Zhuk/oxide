@@ -62,17 +62,13 @@ pub fn execute_copy(
       let rendered = super::render_string(text, ctx)?;
       std::fs::write(&dest, rendered)
         .with_context(|| format!("Failed to write {}", dest.display()))?;
-      let permissions = std::fs::metadata(&src)
-        .with_context(|| format!("Failed to read metadata for {}", src.display()))?
-        .permissions();
-      std::fs::set_permissions(&dest, permissions)
-        .with_context(|| format!("Failed to set permissions on {}", dest.display()))?;
       return Ok(rollbacks);
     }
   }
 
-  std::fs::copy(&src, &dest)
-    .with_context(|| format!("Failed to copy {} to {}", src.display(), dest.display()))?;
+  let bytes = std::fs::read(&src)
+    .with_context(|| format!("Failed to read addon source {}", src.display()))?;
+  std::fs::write(&dest, bytes).with_context(|| format!("Failed to write {}", dest.display()))?;
 
   Ok(rollbacks)
 }

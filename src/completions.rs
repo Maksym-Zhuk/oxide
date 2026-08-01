@@ -14,7 +14,7 @@ use clap_complete::{
 };
 
 use crate::{
-  addons::{cache::AddonsCache, manifest::AddonManifest},
+  addons::{self, cache::AddonsCache},
   cli,
   paths::AnesisPaths,
   templates::cache::TemplatesCache,
@@ -258,7 +258,7 @@ fn addon_commands(addons_dir: &Path, addon_path: &str) -> Vec<InstalledAddonComm
   let Ok(content) = fs::read_to_string(&manifest_path) else {
     return Vec::new();
   };
-  let Ok(manifest) = serde_json::from_str::<AddonManifest>(&content) else {
+  let Ok(manifest) = addons::manifest::parse(&content) else {
     return Vec::new();
   };
 

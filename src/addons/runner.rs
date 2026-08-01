@@ -214,7 +214,7 @@ pub async fn run_addon_command(
       Step::Delete(s) => execute_delete(s, project_root, &tera_ctx),
       Step::Rename(s) => execute_rename(s, project_root, &tera_ctx),
       Step::Move(s) => execute_move(s, project_root, &tera_ctx),
-      Step::Packages(s) => execute_packages(s, project_root),
+      Step::Packages(s) => execute_packages(s, project_root, non_interactive, ctx.allow_run),
       Step::Run(s) => execute_run(s, project_root, &tera_ctx, non_interactive, ctx.allow_run),
     }
     .with_context(|| format!("step {} ({}) failed", idx + 1, label));
@@ -585,11 +585,16 @@ fn insert_with_derived(ctx: &mut tera::Context, map: &HashMap<String, String>) {
 fn prune_empty_dirs(start: Option<&Path>, project_root: &Path) {
   let mut dir = start;
   while let Some(d) = dir {
-    if d == project_root || fs::remove_dir(d).is_err() {
+    if d == project_root || !d.starts_with(project_root) || fs::remove_dir(d).is_err() {
       break;
     }
     dir = d.parent();
   }
+}
+
+#[doc(hidden)]
+pub fn prune_empty_dirs_for_tests(start: Option<&Path>, project_root: &Path) {
+  prune_empty_dirs(start, project_root);
 }
 
 pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) -> Result<()> {

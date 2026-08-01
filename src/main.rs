@@ -213,6 +213,7 @@ async fn run() -> Result<()> {
         credential_id,
         org_id,
       } => {
+        is_valid_github_repo_url(&template_url)?;
         republish(&ctx, &template_url, visibility, credential_id, org_id).await?;
       }
     },
