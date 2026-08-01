@@ -36,7 +36,7 @@ jobs:
                   key: ${{ matrix.os }}
 
             - name: Install nextest
-              uses: taiki-e/install-action@v2
+              uses: taiki-e/install-action@v2.85.4
               with:
                   tool: cargo-nextest
 
@@ -73,7 +73,7 @@ jobs:
                   key: coverage
 
             - name: Install cargo-llvm-cov
-              uses: taiki-e/install-action@v2
+              uses: taiki-e/install-action@v2.85.4
               with:
                   tool: cargo-llvm-cov
 
@@ -142,7 +142,7 @@ jobs:
             - uses: actions/checkout@v4
 
             - name: Install cargo-audit and cargo-deny
-              uses: taiki-e/install-action@v2
+              uses: taiki-e/install-action@v2.85.4
               with:
                   tool: cargo-audit,cargo-deny
 
