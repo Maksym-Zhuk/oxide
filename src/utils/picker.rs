@@ -41,6 +41,22 @@ pub struct PickItem {
   pub haystack: String,
 }
 
+pub fn search_results_json(items: &[PickItem], query: Option<&str>) -> Vec<serde_json::Value> {
+  let needle = query.unwrap_or_default().to_lowercase();
+  items
+    .iter()
+    .filter(|i| needle.is_empty() || i.haystack.contains(&needle))
+    .map(|i| {
+      serde_json::json!({
+        "kind": i.kind.tag(),
+        "id": i.id,
+        "name": i.name,
+        "description": i.description,
+      })
+    })
+    .collect()
+}
+
 fn tokenize(query: &str) -> Vec<&str> {
   query
     .split(|c: char| !c.is_alphanumeric())

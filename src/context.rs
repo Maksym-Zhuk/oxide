@@ -17,6 +17,9 @@ pub enum CleanupTask {
   PartialProject {
     path: PathBuf,
   },
+  PartialProjectFiles {
+    paths: Vec<PathBuf>,
+  },
   PartialAddon {
     addon_id: String,
     project_root: PathBuf,

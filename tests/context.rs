@@ -6,16 +6,7 @@ use assert_fs::TempDir;
 use reqwest::Client;
 
 fn make_paths(tmp: &TempDir) -> AnesisPaths {
-  AnesisPaths {
-    home: tmp.path().to_path_buf(),
-    version_check: tmp.path().join("version_check.json"),
-    cache: tmp.path().join("cache"),
-    templates: tmp.path().join("cache/templates"),
-    auth: tmp.path().join("auth.json"),
-    addons: tmp.path().join("cache/addons"),
-    addons_index: tmp.path().join("cache/addons/anesis-addons.json"),
-    stacks: tmp.path().join("cache/stacks"),
-  }
+  AnesisPaths::under(tmp.path())
 }
 
 #[test]
@@ -37,7 +28,7 @@ fn new_preserves_supplied_paths() {
 
   let ctx = AppContext::new(paths, Client::new(), cleanup_state);
 
-  assert_eq!(ctx.paths.home, tmp.path());
+  assert_eq!(ctx.paths.home, tmp.path().join(".anesis"));
   assert_eq!(ctx.paths.auth, expected_auth);
 }
 

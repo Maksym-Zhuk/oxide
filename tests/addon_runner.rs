@@ -1,7 +1,7 @@
 mod common;
 
 use anesis::addons::lock::LockFile;
-use anesis::addons::runner::{run_addon_command, undo_addon};
+use anesis::addons::runner::{list_addon_commands, run_addon_command, undo_addon};
 use anesis::context::{AppContext, CleanupState};
 use anesis::paths::AnesisPaths;
 use assert_fs::TempDir;
@@ -24,17 +24,7 @@ impl Fixture {
   }
 
   fn paths(&self) -> AnesisPaths {
-    let root = self.home.path().join(".anesis");
-    AnesisPaths {
-      home: root.clone(),
-      version_check: root.join("version_check.json"),
-      cache: root.join("cache"),
-      templates: root.join("cache").join("templates"),
-      auth: root.join("auth.json"),
-      addons: root.join("cache").join("addons"),
-      addons_index: root.join("cache").join("addons").join("anesis-addons.json"),
-      stacks: root.join("cache").join("stacks"),
-    }
+    AnesisPaths::under(self.home.path())
   }
 
   fn ctx(&self) -> AppContext {
@@ -205,6 +195,47 @@ async fn an_unknown_command_is_rejected() {
   .unwrap_err();
 
   assert!(err.to_string().contains("nope"), "{err}");
+}
+
+#[tokio::test]
+async fn list_addon_commands_reports_none_available_when_no_variant_matches_and_there_is_no_universal_fallback()
+ {
+  let fx = Fixture::new();
+  fx.seed_project();
+  let manifest = serde_json::json!({
+    "schema_version": "1",
+    "id": "fixture-addon",
+    "name": "Fixture Addon",
+    "version": "1.0.0",
+    "description": "",
+    "author": "anesis",
+    "requires": [],
+    "inputs": [],
+    "detect": [],
+    "variants": [{
+      "when": "only-matches-nothing",
+      "commands": [{
+        "name": "install",
+        "description": "",
+        "once": false,
+        "requires_commands": [],
+        "inputs": [],
+        "steps": []
+      }]
+    }]
+  });
+  fx.install_addon("fixture-addon", manifest);
+
+  list_addon_commands(
+    &fx.ctx(),
+    "fixture-addon",
+    fx.project.path(),
+    &HashMap::new(),
+    true,
+    false,
+  )
+  .await
+  .unwrap();
 }
 
 #[tokio::test]

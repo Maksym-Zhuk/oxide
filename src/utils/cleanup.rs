@@ -53,6 +53,16 @@ pub fn run_cleanup(task: &CleanupTask) {
       println!("✓ Removed incomplete project {}", path.display());
     }
 
+    CleanupTask::PartialProjectFiles { paths } => {
+      let removed = paths
+        .iter()
+        .filter(|p| p.exists() && fs::remove_file(p).is_ok())
+        .count();
+      if removed > 0 {
+        println!("✓ Removed {removed} newly-created file(s) from the interrupted generation");
+      }
+    }
+
     CleanupTask::PartialAddon {
       addon_id,
       project_root,

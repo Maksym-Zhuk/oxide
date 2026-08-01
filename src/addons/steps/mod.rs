@@ -22,6 +22,45 @@ pub enum Rollback {
   IrreversibleRun { command: String },
 }
 
+#[derive(Debug)]
+pub struct StepFailure {
+  pub error: anyhow::Error,
+  pub rollbacks: Vec<Rollback>,
+}
+
+impl StepFailure {
+  pub fn new(error: impl Into<anyhow::Error>, rollbacks: Vec<Rollback>) -> Self {
+    Self {
+      error: error.into(),
+      rollbacks,
+    }
+  }
+
+  pub fn without_rollbacks(error: impl Into<anyhow::Error>) -> Self {
+    Self::new(error, Vec::new())
+  }
+}
+
+impl std::fmt::Display for StepFailure {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    std::fmt::Display::fmt(&self.error, f)
+  }
+}
+
+impl std::error::Error for StepFailure {
+  fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    self.error.source()
+  }
+}
+
+impl From<anyhow::Error> for StepFailure {
+  fn from(error: anyhow::Error) -> Self {
+    Self::without_rollbacks(error)
+  }
+}
+
+pub type StepResult = std::result::Result<Vec<Rollback>, StepFailure>;
+
 pub fn render_string(s: &str, ctx: &tera::Context) -> Result<String> {
   tera::Tera::one_off(s, ctx, false).map_err(Into::into)
 }

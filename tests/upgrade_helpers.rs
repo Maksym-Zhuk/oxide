@@ -70,7 +70,7 @@ fn asset_filename_uses_zip_for_windows_builds() {
 
 #[test]
 fn release_asset_url_uses_expected_github_pattern() {
-  let asset_url = release_asset_url_for_tests("1.2.3", "linux-x86_64");
+  let asset_url = release_asset_url_for_tests("1.2.3", "linux-x86_64").unwrap();
   assert_eq!(
     asset_url,
     "https://github.com/anesis-dev/anesis-cli/releases/download/v1.2.3/anesis-linux-x86_64.tar.gz"
@@ -177,8 +177,36 @@ fn cache_is_stale_for_invalid_date_format() {
 #[test]
 fn release_checksums_url_points_at_the_tag_assets() {
   assert_eq!(
-    release_checksums_url_for_tests("1.2.3"),
+    release_checksums_url_for_tests("1.2.3").unwrap(),
     "https://github.com/anesis-dev/anesis-cli/releases/download/v1.2.3/SHA256SUMS"
+  );
+}
+
+#[test]
+fn release_asset_url_rejects_a_plaintext_override() {
+  let previous = std::env::var("ANESIS_RELEASES_DOWNLOAD_BASE_URL").ok();
+  unsafe {
+    std::env::set_var(
+      "ANESIS_RELEASES_DOWNLOAD_BASE_URL",
+      "http://evil.example/dl",
+    )
+  };
+
+  let asset_err = release_asset_url_for_tests("1.2.3", "linux-x86_64").unwrap_err();
+  let checksums_err = release_checksums_url_for_tests("1.2.3").unwrap_err();
+
+  match previous {
+    Some(v) => unsafe { std::env::set_var("ANESIS_RELEASES_DOWNLOAD_BASE_URL", v) },
+    None => unsafe { std::env::remove_var("ANESIS_RELEASES_DOWNLOAD_BASE_URL") },
+  }
+
+  assert!(
+    asset_err.to_string().contains("https"),
+    "unexpected error: {asset_err}"
+  );
+  assert!(
+    checksums_err.to_string().contains("https"),
+    "unexpected error: {checksums_err}"
   );
 }
 

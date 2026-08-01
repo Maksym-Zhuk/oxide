@@ -76,8 +76,8 @@ assert_cmd = "2.0"
 predicates = "3.1"
 assert_fs = "1.1"
 # `--json` output is a public v1.0 contract. Snapshots make an accidental key
-# rename or shape change fail the build instead of silently breaking scripts.
 insta = { version = "1.43", features = ["json", "redactions"] }
+wiremock = "0.6"
 
 [profile.release]
 opt-level = 3

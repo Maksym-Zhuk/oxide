@@ -1,6 +1,7 @@
 use clap::{CommandFactory, Parser};
 
 pub mod commands;
+pub mod dispatch;
 use commands::Commands;
 
 #[derive(Parser)]

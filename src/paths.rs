@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+  fs,
+  path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 
@@ -20,9 +23,13 @@ impl AnesisPaths {
       None => dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?,
     };
 
+    Ok(Self::under(&home_dir))
+  }
+
+  pub fn under(home_dir: &Path) -> Self {
     let anesis_home = home_dir.join(".anesis");
 
-    Ok(Self {
+    Self {
       home: anesis_home.clone(),
       version_check: anesis_home.join("version_check.json"),
       cache: anesis_home.join("cache"),
@@ -34,7 +41,7 @@ impl AnesisPaths {
         .join("addons")
         .join("anesis-addons.json"),
       stacks: anesis_home.join("cache").join("stacks"),
-    })
+    }
   }
 
   pub fn ensure_directories(&self) -> Result<()> {

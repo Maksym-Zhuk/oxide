@@ -7,7 +7,7 @@ use inquire::Confirm;
 
 use crate::addons::manifest::PackagesStep;
 
-use super::Rollback;
+use super::{Rollback, StepFailure, StepResult};
 
 enum PackageManager {
   Npm,
@@ -92,6 +92,16 @@ fn detect_pm(root: &Path) -> Result<PackageManager> {
 }
 
 pub fn execute_packages(
+  step: &PackagesStep,
+  project_root: &Path,
+  non_interactive: bool,
+  allow_run: bool,
+) -> StepResult {
+  execute_packages_inner(step, project_root, non_interactive, allow_run)
+    .map_err(StepFailure::without_rollbacks)
+}
+
+fn execute_packages_inner(
   step: &PackagesStep,
   project_root: &Path,
   non_interactive: bool,

@@ -5,6 +5,7 @@ use anesis::{
   cli::{
     self,
     commands::{AddonCommands, Commands, StackCommands, TemplateCommands},
+    dispatch::{parse_inputs, skip_version_notice},
   },
   completions, config,
   context::AppContext,
@@ -96,29 +97,7 @@ async fn run() -> Result<()> {
 
   let ctx = config::build_app_context()?.with_cli_flags(cli.no_telemetry, cli.allow_run);
 
-  let json_mode = matches!(
-    &cli.command,
-    Commands::Account { json: true }
-      | Commands::Info { json: true }
-      | Commands::Status { json: true }
-      | Commands::Search { json: true, .. }
-      | Commands::Outdated { json: true }
-      | Commands::Template {
-        command: TemplateCommands::List { json: true } | TemplateCommands::Info { json: true, .. }
-      }
-      | Commands::Addon {
-        command: AddonCommands::List { json: true } | AddonCommands::Info { json: true, .. }
-      }
-      | Commands::Stack {
-        command: StackCommands::List { json: true } | StackCommands::Info { json: true, .. }
-      }
-  );
-  let skip_version_notice = json_mode
-    || cli.quiet
-    || matches!(
-      &cli.command,
-      Commands::Upgrade | Commands::Completions { .. } | Commands::Man { .. }
-    );
+  let skip_version_notice = skip_version_notice(&cli.command, cli.quiet);
   let version_check_handle = if skip_version_notice {
     None
   } else {
@@ -456,23 +435,7 @@ async fn run() -> Result<()> {
       items.extend(stacks.unwrap_or_default().iter().map(|s| s.to_pick_item()));
 
       if json {
-        let needle = query.unwrap_or_default().to_lowercase();
-        let results: Vec<serde_json::Value> = items
-          .iter()
-          .filter(|i| needle.is_empty() || i.haystack.contains(&needle))
-          .map(|i| {
-            serde_json::json!({
-              "kind": match i.kind {
-                ItemKind::Template => "template",
-                ItemKind::Addon => "addon",
-                ItemKind::Stack => "stack",
-              },
-              "id": i.id,
-              "name": i.name,
-              "description": i.description,
-            })
-          })
-          .collect();
+        let results = picker::search_results_json(&items, query.as_deref());
         println!("{}", serde_json::to_string_pretty(&results)?);
         return Ok(());
       }
@@ -573,17 +536,6 @@ async fn choose_addon(ctx: &AppContext, installed: bool, title: &'static str) ->
   }
 }
 
-fn parse_inputs(pairs: &[String]) -> Result<std::collections::HashMap<String, String>> {
-  let mut map = std::collections::HashMap::new();
-  for pair in pairs {
-    let (name, value) = pair
-      .split_once('=')
-      .ok_or_else(|| anyhow::anyhow!("Invalid --input '{pair}'; expected NAME=VALUE"))?;
-    map.insert(name.to_string(), value.to_string());
-  }
-  Ok(map)
-}
-
 async fn apply_stack(
   ctx: &AppContext,
   project_name: &str,
@@ -647,7 +599,14 @@ async fn create_new_project(
     excluded = anesis::templates::generator::excluded_paths(&manifest.exclude, &inputs);
   }
 
-  let overwrites = overwritten_paths(&files, project_name, &excluded)?;
+  let cwd = std::env::current_dir()?;
+  let output_path = if project_name == "." {
+    cwd
+  } else {
+    cwd.join(project_name)
+  };
+
+  let overwrites = overwritten_paths(&files, &output_path, &excluded)?;
   if !overwrites.is_empty() && !yes {
     println!(
       "⚠ Generating here will overwrite {} existing file(s):",
@@ -674,7 +633,7 @@ async fn create_new_project(
     println!("Generating project from template '{template_name}'...");
   }
 
-  extract_template(&files, project_name, ctx, &inputs, &excluded)?;
+  extract_template(&files, &output_path, project_name, ctx, &inputs, &excluded)?;
 
   let sp = spinner("Finishing up...");
   record_template_use(ctx, template_name).await;

@@ -1,18 +1,17 @@
 use std::path::Path;
 
-use anyhow::Result;
 use inquire::Confirm;
 
 use crate::addons::manifest::{CreateStep, IfExists};
 
-use super::Rollback;
+use super::{Rollback, StepFailure, StepResult};
 
 pub fn execute_create(
   step: &CreateStep,
   project_root: &Path,
   ctx: &tera::Context,
   non_interactive: bool,
-) -> Result<Vec<Rollback>> {
+) -> StepResult {
   let rendered_path = super::render_string(&step.path, ctx)?;
   let path = super::safe_join(project_root, &rendered_path, "create path")?;
   let mut content = super::render_string(&step.content, ctx)?;
@@ -32,19 +31,22 @@ pub fn execute_create(
         }
         let overwrite = Confirm::new(&format!("{} already exists. Overwrite?", step.path))
           .with_default(false)
-          .prompt()?;
+          .prompt()
+          .map_err(StepFailure::without_rollbacks)?;
         if !overwrite {
           return Ok(rollbacks);
         }
+        let original = std::fs::read(&path).map_err(StepFailure::without_rollbacks)?;
         rollbacks.push(Rollback::RestoreFile {
           path: path.clone(),
-          original: std::fs::read(&path)?,
+          original,
         });
       }
       IfExists::Overwrite => {
+        let original = std::fs::read(&path).map_err(StepFailure::without_rollbacks)?;
         rollbacks.push(Rollback::RestoreFile {
           path: path.clone(),
-          original: std::fs::read(&path)?,
+          original,
         });
       }
     }
@@ -52,10 +54,14 @@ pub fn execute_create(
     rollbacks.push(Rollback::DeleteCreatedFile { path: path.clone() });
   }
 
-  if let Some(parent) = path.parent() {
-    std::fs::create_dir_all(parent)?;
+  if let Some(parent) = path.parent()
+    && let Err(e) = std::fs::create_dir_all(parent)
+  {
+    return Err(StepFailure::new(e, rollbacks));
   }
-  std::fs::write(&path, content)?;
+  if let Err(e) = std::fs::write(&path, content) {
+    return Err(StepFailure::new(e, rollbacks));
+  }
 
   Ok(rollbacks)
 }

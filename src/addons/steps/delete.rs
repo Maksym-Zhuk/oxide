@@ -1,16 +1,10 @@
 use std::path::Path;
 
-use anyhow::Result;
-
 use crate::addons::manifest::DeleteStep;
 
-use super::{Rollback, resolve_target};
+use super::{Rollback, StepFailure, StepResult, resolve_target};
 
-pub fn execute_delete(
-  step: &DeleteStep,
-  project_root: &Path,
-  ctx: &tera::Context,
-) -> Result<Vec<Rollback>> {
+pub fn execute_delete(step: &DeleteStep, project_root: &Path, ctx: &tera::Context) -> StepResult {
   let paths = resolve_target(&step.target, project_root, ctx)?;
   let mut rollbacks = Vec::new();
 
@@ -29,12 +23,17 @@ pub fn execute_delete(
       );
       continue;
     }
-    let original = std::fs::read(&path)?;
+    let original = match std::fs::read(&path) {
+      Ok(o) => o,
+      Err(e) => return Err(StepFailure::new(e, rollbacks)),
+    };
     rollbacks.push(Rollback::RestoreFile {
       path: path.clone(),
       original,
     });
-    std::fs::remove_file(&path)?;
+    if let Err(e) = std::fs::remove_file(&path) {
+      return Err(StepFailure::new(e, rollbacks));
+    }
   }
 
   Ok(rollbacks)

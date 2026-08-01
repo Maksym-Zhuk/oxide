@@ -7,9 +7,20 @@ use inquire::Confirm;
 
 use crate::addons::manifest::RunStep;
 
-use super::Rollback;
+use super::{Rollback, StepFailure, StepResult};
 
 pub fn execute_run(
+  step: &RunStep,
+  project_root: &Path,
+  ctx: &tera::Context,
+  non_interactive: bool,
+  allow_run: bool,
+) -> StepResult {
+  execute_run_inner(step, project_root, ctx, non_interactive, allow_run)
+    .map_err(StepFailure::without_rollbacks)
+}
+
+fn execute_run_inner(
   step: &RunStep,
   project_root: &Path,
   ctx: &tera::Context,

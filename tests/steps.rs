@@ -99,7 +99,7 @@ fn inject_after_marker() {
     if_not_found: IfNotFound::Error,
   };
 
-  execute_inject(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_inject(&step, dir.path(), &empty_ctx(), true).unwrap();
 
   let result = std::fs::read_to_string(dir.path().join("app.ts")).unwrap();
   let lines: Vec<&str> = result.lines().collect();
@@ -126,7 +126,7 @@ fn inject_before_marker() {
     if_not_found: IfNotFound::Error,
   };
 
-  execute_inject(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_inject(&step, dir.path(), &empty_ctx(), true).unwrap();
 
   let lines: Vec<String> = std::fs::read_to_string(dir.path().join("app.ts"))
     .unwrap()
@@ -155,7 +155,7 @@ fn inject_marker_whitespace_insensitive() {
     if_not_found: IfNotFound::Error,
   };
 
-  execute_inject(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_inject(&step, dir.path(), &empty_ctx(), true).unwrap();
 
   let content = std::fs::read_to_string(dir.path().join("app.module.ts")).unwrap();
   assert!(content.contains("FooModule,\n    //  anesis:module-imports"));
@@ -179,7 +179,7 @@ fn inject_marker_not_found_error() {
     if_not_found: IfNotFound::Error,
   };
 
-  assert!(execute_inject(&step, dir.path(), &empty_ctx()).is_err());
+  assert!(execute_inject(&step, dir.path(), &empty_ctx(), true).is_err());
 }
 
 #[test]
@@ -200,9 +200,35 @@ fn inject_marker_not_found_skip() {
     if_not_found: IfNotFound::Skip,
   };
 
-  execute_inject(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_inject(&step, dir.path(), &empty_ctx(), true).unwrap();
   let content = std::fs::read_to_string(dir.path().join("app.ts")).unwrap();
   assert_eq!(content, "const app = express();");
+}
+
+#[test]
+fn inject_marker_not_found_warn_and_ask_degrades_to_skip_when_non_interactive() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir
+    .child("app.ts")
+    .write_str("const app = express();")
+    .unwrap();
+
+  let step = InjectStep {
+    target: Target::File {
+      file: "app.ts".into(),
+    },
+    content: "line".into(),
+    after: Some("// nonexistent".into()),
+    before: None,
+    if_not_found: IfNotFound::WarnAndAsk,
+  };
+
+  execute_inject(&step, dir.path(), &empty_ctx(), true).unwrap();
+  let content = std::fs::read_to_string(dir.path().join("app.ts")).unwrap();
+  assert_eq!(
+    content, "const app = express();",
+    "non-interactive WarnAndAsk must skip the file, not prompt or fail"
+  );
 }
 
 #[test]
@@ -220,7 +246,7 @@ fn inject_no_marker_prepends() {
     if_not_found: IfNotFound::Skip,
   };
 
-  execute_inject(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_inject(&step, dir.path(), &empty_ctx(), true).unwrap();
 
   let lines: Vec<String> = std::fs::read_to_string(dir.path().join("app.ts"))
     .unwrap()
@@ -245,7 +271,7 @@ fn replace_substitutes_text() {
     if_not_found: IfNotFound::Error,
   };
 
-  execute_replace(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_replace(&step, dir.path(), &empty_ctx(), true).unwrap();
   let content = std::fs::read_to_string(dir.path().join("app.ts")).unwrap();
   assert_eq!(content, "const PORT = 4000;");
 }
@@ -264,7 +290,7 @@ fn replace_not_found_error() {
     if_not_found: IfNotFound::Error,
   };
 
-  assert!(execute_replace(&step, dir.path(), &empty_ctx()).is_err());
+  assert!(execute_replace(&step, dir.path(), &empty_ctx(), true).is_err());
 }
 
 #[test]
@@ -281,9 +307,31 @@ fn replace_not_found_skip_leaves_file_unchanged() {
     if_not_found: IfNotFound::Skip,
   };
 
-  execute_replace(&step, dir.path(), &empty_ctx()).unwrap();
+  execute_replace(&step, dir.path(), &empty_ctx(), true).unwrap();
   let content = std::fs::read_to_string(dir.path().join("app.ts")).unwrap();
   assert_eq!(content, "const PORT = 3000;");
+}
+
+#[test]
+fn replace_not_found_warn_and_ask_degrades_to_skip_when_non_interactive() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("app.ts").write_str("const PORT = 3000;").unwrap();
+
+  let step = ReplaceStep {
+    target: Target::File {
+      file: "app.ts".into(),
+    },
+    find: "9999".into(),
+    replace: "0".into(),
+    if_not_found: IfNotFound::WarnAndAsk,
+  };
+
+  execute_replace(&step, dir.path(), &empty_ctx(), true).unwrap();
+  let content = std::fs::read_to_string(dir.path().join("app.ts")).unwrap();
+  assert_eq!(
+    content, "const PORT = 3000;",
+    "non-interactive WarnAndAsk must skip the file, not prompt or fail"
+  );
 }
 
 #[test]
@@ -300,7 +348,7 @@ fn replace_rollback_is_restore_file() {
     if_not_found: IfNotFound::Error,
   };
 
-  let rollbacks = execute_replace(&step, dir.path(), &empty_ctx()).unwrap();
+  let rollbacks = execute_replace(&step, dir.path(), &empty_ctx(), true).unwrap();
   assert!(matches!(rollbacks[0], Rollback::RestoreFile { .. }));
 }
 
@@ -461,6 +509,19 @@ fn rename_target_exists_is_err() {
     to: "b.txt".into(),
   };
   assert!(execute_rename(&step, dir.path(), &tera::Context::new()).is_err());
+}
+
+#[test]
+fn rename_creates_destination_dirs() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("file.txt").write_str("data").unwrap();
+
+  let step = RenameStep {
+    from: "file.txt".into(),
+    to: "a/b/c/file.txt".into(),
+  };
+  execute_rename(&step, dir.path(), &tera::Context::new()).unwrap();
+  assert!(dir.path().join("a/b/c/file.txt").exists());
 }
 
 #[test]
@@ -1010,7 +1071,7 @@ fn inject_content_uses_template_vars() {
 
   let mut ctx = tera::Context::new();
   ctx.insert("lib", "cors");
-  execute_inject(&step, dir.path(), &ctx).unwrap();
+  execute_inject(&step, dir.path(), &ctx, true).unwrap();
 
   let content = std::fs::read_to_string(dir.path().join("app.ts")).unwrap();
   assert!(content.contains("import cors from 'cors';"));
@@ -1035,7 +1096,7 @@ fn replace_uses_template_var_in_replacement() {
 
   let mut ctx = tera::Context::new();
   ctx.insert("port", "4000");
-  execute_replace(&step, dir.path(), &ctx).unwrap();
+  execute_replace(&step, dir.path(), &ctx, true).unwrap();
 
   let content = std::fs::read_to_string(dir.path().join("config.ts")).unwrap();
   assert_eq!(content, "const PORT = 4000;");
@@ -1155,6 +1216,86 @@ fn packages_no_manifest_is_error() {
 }
 
 #[test]
+fn packages_step_fails_clearly_when_the_package_manager_binary_is_missing() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("package.json").write_str("{}").unwrap();
+  let step = PackagesStep {
+    dependencies: vec!["left-pad".to_string()],
+    dev_dependencies: vec![],
+  };
+
+  let previous_path = std::env::var("PATH").ok();
+  unsafe { std::env::set_var("PATH", "") };
+  let result = execute_packages(&step, dir.path(), true, true);
+  match previous_path {
+    Some(p) => unsafe { std::env::set_var("PATH", p) },
+    None => unsafe { std::env::remove_var("PATH") },
+  }
+
+  let err = result.expect_err("with nothing on PATH, npm cannot be found");
+  assert!(
+    err.to_string().contains("PATH") || err.to_string().contains("was not found"),
+    "the error should say the package manager wasn't found: {err}"
+  );
+}
+
+#[test]
+#[cfg(unix)]
+fn packages_step_self_restores_snapshot_files_when_the_install_command_fails() {
+  use std::os::unix::fs::PermissionsExt;
+
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir
+    .child("package.json")
+    .write_str(r#"{"name":"x"}"#)
+    .unwrap();
+  dir
+    .child("package-lock.json")
+    .write_str("original-lock-content")
+    .unwrap();
+
+  let bin_dir = assert_fs::TempDir::new().unwrap();
+  let fake_npm = bin_dir.child("npm");
+  fake_npm
+    .write_str(
+      "#!/bin/sh\necho corrupted > package.json\necho corrupted > package-lock.json\nexit 1\n",
+    )
+    .unwrap();
+  std::fs::set_permissions(fake_npm.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+  let previous_path = std::env::var("PATH").unwrap_or_default();
+  unsafe {
+    std::env::set_var(
+      "PATH",
+      format!("{}:{previous_path}", bin_dir.path().display()),
+    )
+  };
+
+  let step = PackagesStep {
+    dependencies: vec!["left-pad".to_string()],
+    dev_dependencies: vec![],
+  };
+  let result = execute_packages(&step, dir.path(), true, true);
+
+  unsafe { std::env::set_var("PATH", previous_path) };
+
+  assert!(
+    result.is_err(),
+    "a non-zero exit from the package manager must be reported as a failure"
+  );
+  assert_eq!(
+    std::fs::read_to_string(dir.path().join("package.json")).unwrap(),
+    r#"{"name":"x"}"#,
+    "package.json must be restored to its pre-install content"
+  );
+  assert_eq!(
+    std::fs::read_to_string(dir.path().join("package-lock.json")).unwrap(),
+    "original-lock-content",
+    "package-lock.json must be restored to its pre-install content"
+  );
+}
+
+#[test]
 fn run_executes_in_project_root_and_records_irreversible() {
   let dir = assert_fs::TempDir::new().unwrap();
   let step = RunStep {
@@ -1210,7 +1351,7 @@ fn replace_target_file_renders_template_path() {
     replace: "4000".into(),
     if_not_found: IfNotFound::Error,
   };
-  execute_replace(&step, dir.path(), &ctx_with("resource_name", "user")).unwrap();
+  execute_replace(&step, dir.path(), &ctx_with("resource_name", "user"), true).unwrap();
 
   let content = std::fs::read_to_string(dir.path().join("user.ts")).unwrap();
   assert_eq!(content, "const PORT = 4000;");
@@ -1305,4 +1446,202 @@ fn packages_step_with_no_dependencies_is_a_noop_even_without_allow_run() {
 
   let rollbacks = execute_packages(&step, dir.path(), true, false).unwrap();
   assert!(rollbacks.is_empty());
+}
+
+fn assert_partial_rollback_matches_disk_state(
+  rollbacks: &[Rollback],
+  originals: &[(std::path::PathBuf, &str)],
+) {
+  let covered: std::collections::HashSet<_> = rollbacks
+    .iter()
+    .map(|r| match r {
+      Rollback::RestoreFile { path, .. } => path.clone(),
+      other => panic!("expected only RestoreFile rollbacks, got {other:?}"),
+    })
+    .collect();
+
+  for rollback in rollbacks {
+    if let Rollback::RestoreFile { path, original } = rollback {
+      let on_disk = std::fs::read(path).unwrap();
+      assert_ne!(
+        &on_disk,
+        original,
+        "a captured rollback entry must correspond to a file that was actually modified: {}",
+        path.display()
+      );
+      std::fs::write(path, original).unwrap();
+    }
+  }
+
+  for (path, original_text) in originals {
+    if !covered.contains(path) {
+      let content = std::fs::read_to_string(path).unwrap();
+      assert_eq!(
+        &content,
+        original_text,
+        "a file the failing glob step never reached (or reached before failing) must be untouched: {}",
+        path.display()
+      );
+    }
+  }
+}
+
+#[test]
+fn inject_partial_glob_failure_reports_a_rollback_for_every_file_it_actually_changed() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let original_text = "start\nMARKER\nend\n";
+  dir.child("files/a.txt").write_str(original_text).unwrap();
+  dir.child("files/b.txt").write_str(original_text).unwrap();
+  dir
+    .child("files/c.bin")
+    .write_binary(&[0xff, 0xfe, 0x00, 0x01])
+    .unwrap();
+
+  let step = InjectStep {
+    target: Target::Glob {
+      glob: "files/*".into(),
+    },
+    content: "INJECTED".into(),
+    after: Some("MARKER".into()),
+    before: None,
+    if_not_found: IfNotFound::Error,
+  };
+
+  let failure = execute_inject(&step, dir.path(), &empty_ctx(), true)
+    .expect_err("the binary file must fail UTF-8 decoding");
+
+  assert!(
+    failure.error.to_string().contains("not valid UTF-8"),
+    "unexpected error: {}",
+    failure.error
+  );
+  assert_eq!(
+    failure.rollbacks.len(),
+    2,
+    "a.txt and b.txt must both have been rewritten (and recorded) before c.bin failed"
+  );
+  assert_partial_rollback_matches_disk_state(
+    &failure.rollbacks,
+    &[
+      (dir.path().join("files/a.txt"), original_text),
+      (dir.path().join("files/b.txt"), original_text),
+    ],
+  );
+}
+
+#[test]
+fn replace_partial_glob_failure_reports_a_rollback_for_every_file_it_actually_changed() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let original_text = "const PORT = 3000;";
+  dir.child("files/a.ts").write_str(original_text).unwrap();
+  dir.child("files/b.ts").write_str(original_text).unwrap();
+  dir
+    .child("files/c.bin")
+    .write_binary(&[0xff, 0xfe, 0x00, 0x01])
+    .unwrap();
+
+  let step = ReplaceStep {
+    target: Target::Glob {
+      glob: "files/*".into(),
+    },
+    find: "3000".into(),
+    replace: "4000".into(),
+    if_not_found: IfNotFound::Error,
+  };
+
+  let failure = execute_replace(&step, dir.path(), &empty_ctx(), true)
+    .expect_err("the binary file must fail UTF-8 decoding");
+
+  assert_eq!(
+    failure.rollbacks.len(),
+    2,
+    "a.ts and b.ts must both have been rewritten (and recorded) before c.bin failed"
+  );
+  assert_partial_rollback_matches_disk_state(
+    &failure.rollbacks,
+    &[
+      (dir.path().join("files/a.ts"), original_text),
+      (dir.path().join("files/b.ts"), original_text),
+    ],
+  );
+}
+
+#[test]
+fn append_partial_glob_failure_reports_a_rollback_for_every_file_it_actually_changed() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let original_text = "existing\n";
+  dir.child("files/a.txt").write_str(original_text).unwrap();
+  dir.child("files/b.txt").write_str(original_text).unwrap();
+  dir
+    .child("files/c.bin")
+    .write_binary(&[0xff, 0xfe, 0x00, 0x01])
+    .unwrap();
+
+  let step = AppendStep {
+    target: Target::Glob {
+      glob: "files/*".into(),
+    },
+    content: "appended\n".into(),
+  };
+
+  let failure = execute_append(&step, dir.path(), &empty_ctx())
+    .expect_err("the binary file must fail UTF-8 decoding");
+
+  assert_eq!(
+    failure.rollbacks.len(),
+    2,
+    "a.txt and b.txt must both have been rewritten (and recorded) before c.bin failed"
+  );
+  assert_partial_rollback_matches_disk_state(
+    &failure.rollbacks,
+    &[
+      (dir.path().join("files/a.txt"), original_text),
+      (dir.path().join("files/b.txt"), original_text),
+    ],
+  );
+}
+
+#[test]
+#[cfg(unix)]
+fn delete_partial_glob_failure_reports_a_rollback_for_every_file_it_actually_deleted() {
+  use std::os::unix::fs::PermissionsExt;
+
+  let dir = assert_fs::TempDir::new().unwrap();
+  let original_text = "keep me if the delete fails\n";
+  dir.child("files/a.txt").write_str(original_text).unwrap();
+  dir.child("files/b.txt").write_str(original_text).unwrap();
+  let unreadable = dir.child("files/c.txt");
+  unreadable.write_str(original_text).unwrap();
+  std::fs::set_permissions(unreadable.path(), std::fs::Permissions::from_mode(0o000)).unwrap();
+
+  let step = DeleteStep {
+    target: Target::Glob {
+      glob: "files/*".into(),
+    },
+  };
+
+  let result = execute_delete(&step, dir.path(), &empty_ctx());
+
+  std::fs::set_permissions(unreadable.path(), std::fs::Permissions::from_mode(0o644)).unwrap();
+
+  let failure = result.expect_err("the unreadable file must fail the read");
+
+  assert_eq!(
+    failure.rollbacks.len(),
+    2,
+    "a.txt and b.txt must both have been deleted (and recorded) before c.txt failed"
+  );
+  for rollback in &failure.rollbacks {
+    if let Rollback::RestoreFile { path, .. } = rollback {
+      assert!(
+        !path.exists(),
+        "a captured rollback entry must correspond to a file that was actually deleted: {}",
+        path.display()
+      );
+    }
+  }
+  assert!(
+    dir.path().join("files/c.txt").exists(),
+    "the file that failed to read must not have been touched"
+  );
 }

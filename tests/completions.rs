@@ -52,6 +52,101 @@ fn command_for_paths_builds_without_panic() {
   let _ = command_for_paths(None, None);
 }
 
+fn seed_templates_cache(dir: &assert_fs::TempDir) {
+  dir
+    .child("anesis-templates.json")
+    .write_str(
+      r#"{
+  "lastUpdated": "2026-01-01T00:00:00Z",
+  "templates": [
+    { "name": "react-vite-ts", "version": "1.0.0", "source": "s", "path": "react-vite-ts", "commit_sha": "abc" }
+  ]
+}"#,
+    )
+    .unwrap();
+}
+
+fn seed_addons_cache(dir: &assert_fs::TempDir) {
+  dir
+    .child("anesis-addons.json")
+    .write_str(
+      r#"{
+  "lastUpdated": "2026-01-01T00:00:00Z",
+  "addons": [
+    { "id": "docker-compose", "name": "Docker Compose", "version": "2.0.0", "path": "docker-compose", "commit_sha": "abc", "repo_url": "https://github.com/anesis-dev/addons" }
+  ]
+}"#,
+    )
+    .unwrap();
+  dir
+    .child("docker-compose/anesis.addon.json")
+    .write_str(
+      r#"{
+  "schema_version": "1",
+  "id": "docker-compose",
+  "name": "Docker Compose",
+  "version": "2.0.0",
+  "description": "",
+  "author": "anesis",
+  "requires": [],
+  "inputs": [],
+  "detect": [],
+  "variants": [{
+    "when": null,
+    "commands": [
+      { "name": "install", "description": "Install compose", "once": true, "requires_commands": [], "inputs": [], "steps": [] },
+      { "name": "configure", "description": "", "once": false, "requires_commands": [], "inputs": [], "steps": [] }
+    ]
+  }]
+}"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn template_candidates_lists_every_cached_template() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  seed_templates_cache(&dir);
+
+  let candidates = template_candidates(Some(dir.path()));
+  let names: Vec<String> = candidates
+    .iter()
+    .map(|c| c.get_value().to_string_lossy().into_owned())
+    .collect();
+  assert_eq!(names, vec!["react-vite-ts".to_string()]);
+}
+
+#[test]
+fn addon_candidates_lists_every_cached_addon() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  seed_addons_cache(&dir);
+
+  let candidates = addon_candidates(Some(dir.path()));
+  let ids: Vec<String> = candidates
+    .iter()
+    .map(|c| c.get_value().to_string_lossy().into_owned())
+    .collect();
+  assert_eq!(ids, vec!["docker-compose".to_string()]);
+}
+
+#[test]
+fn command_for_paths_adds_a_use_subcommand_per_installed_addon_with_its_commands() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  seed_addons_cache(&dir);
+
+  let cmd = command_for_paths(None, Some(dir.path()));
+  let use_cmd = cmd
+    .find_subcommand("use")
+    .expect("the base CLI always has a `use` subcommand");
+  let addon_cmd = use_cmd
+    .find_subcommand("docker-compose")
+    .expect("command_for_paths must add a subcommand per installed addon");
+
+  let command_names: Vec<&str> = addon_cmd.get_subcommands().map(|c| c.get_name()).collect();
+  assert!(command_names.contains(&"install"));
+  assert!(command_names.contains(&"configure"));
+}
+
 #[test]
 fn zsh_fpath_snippet_contains_dir_and_compinit() {
   let snippet = zsh_fpath_snippet(Path::new("/home/user/.zfunc"));

@@ -208,23 +208,30 @@ pub async fn run_addon_command(
     let result = match step {
       Step::Copy(s) => execute_copy(s, &addon_dir, project_root, &tera_ctx, non_interactive),
       Step::Create(s) => execute_create(s, project_root, &tera_ctx, non_interactive),
-      Step::Inject(s) => execute_inject(s, project_root, &tera_ctx),
-      Step::Replace(s) => execute_replace(s, project_root, &tera_ctx),
+      Step::Inject(s) => execute_inject(s, project_root, &tera_ctx, non_interactive),
+      Step::Replace(s) => execute_replace(s, project_root, &tera_ctx, non_interactive),
       Step::Append(s) => execute_append(s, project_root, &tera_ctx),
       Step::Delete(s) => execute_delete(s, project_root, &tera_ctx),
       Step::Rename(s) => execute_rename(s, project_root, &tera_ctx),
       Step::Move(s) => execute_move(s, project_root, &tera_ctx),
       Step::Packages(s) => execute_packages(s, project_root, non_interactive, ctx.allow_run),
       Step::Run(s) => execute_run(s, project_root, &tera_ctx, non_interactive, ctx.allow_run),
-    }
-    .with_context(|| format!("step {} ({}) failed", idx + 1, label));
+    };
 
     match result {
       Ok(rollbacks) => journal
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .extend(rollbacks),
-      Err(err) => {
+      Err(failure) => {
+        journal
+          .lock()
+          .unwrap_or_else(|e| e.into_inner())
+          .extend(failure.rollbacks);
+
+        let err = failure
+          .error
+          .context(format!("step {} ({}) failed", idx + 1, label));
         eprintln!("{} {:#}", "✗".red().bold(), err);
         let choice = if non_interactive {
           "Rollback all changes"
@@ -248,17 +255,13 @@ pub async fn run_addon_command(
     }
   }
 
-  let completed_rollbacks = take_journal(&journal);
-  {
-    let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
-    *guard = None;
-  }
+  let completed_rollbacks = journal.lock().unwrap_or_else(|e| e.into_inner()).clone();
 
   let variant_id = detected_id.unwrap_or_else(|| "universal".to_string());
   if let Some(existing) = lock.addons.iter_mut().find(|e| e.id == addon_id) {
     existing.version = manifest.version.clone();
     existing.variant = variant_id;
-    existing.journal.extend(completed_rollbacks);
+    existing.journal.extend(completed_rollbacks.clone());
     existing.inputs.extend(
       input_values
         .iter()
@@ -273,12 +276,29 @@ pub async fn run_addon_command(
       version: manifest.version.clone(),
       variant: variant_id,
       commands_executed: Vec::new(),
-      journal: completed_rollbacks,
+      journal: completed_rollbacks.clone(),
       inputs,
     });
   }
   lock.mark_command_executed(addon_id, command_name);
-  lock.save(project_root)?;
+
+  if let Err(err) = lock.save(project_root) {
+    eprintln!(
+      "{} Failed to save the rollback journal ({err:#}); rolling back this command's changes.",
+      "✗".red().bold()
+    );
+    for rollback in take_journal(&journal).into_iter().rev() {
+      let _ = apply_rollback(rollback, project_root);
+    }
+    println!("Rolled back all changes made by this command.");
+    return Err(err.context("Failed to save anesis.lock"));
+  }
+
+  take_journal(&journal);
+  {
+    let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
+  }
 
   record_addon_use(ctx, addon_id).await;
 
@@ -337,7 +357,7 @@ pub async fn list_addon_commands(
     .or_else(|| manifest.variants.iter().find(|v| v.when.is_none()));
   let commands: Vec<&AddonCommand> = match matched {
     Some(variant) => variant.commands.iter().collect(),
-    None => manifest.variants.iter().flat_map(|v| &v.commands).collect(),
+    None => Vec::new(),
   };
 
   if commands.is_empty() {
@@ -645,8 +665,34 @@ pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) ->
 
   let entry = lock.addons.iter_mut().find(|e| e.id == addon_id).unwrap();
   let journal = std::mem::take(&mut entry.journal);
+
+  let mut remaining = Vec::new();
+  let mut failures = Vec::new();
   for rollback in journal.into_iter().rev() {
-    apply_rollback(rollback, project_root)?;
+    let description = describe_rollback(&rollback);
+    if let Err(err) = apply_rollback(rollback.clone(), project_root) {
+      failures.push(format!("{description}: {err:#}"));
+      remaining.push(rollback);
+    }
+  }
+
+  if !failures.is_empty() {
+    remaining.reverse();
+    let entry = lock.addons.iter_mut().find(|e| e.id == addon_id).unwrap();
+    entry.journal = remaining;
+    lock.save(project_root)?;
+
+    eprintln!(
+      "{} could not undo every change made by '{addon_id}':",
+      "⚠".yellow().bold()
+    );
+    for f in &failures {
+      eprintln!("  {f}");
+    }
+    return Err(anyhow!(
+      "Addon '{addon_id}' was partially reverted; {} change(s) remain — fix the issue above and re-run `anesis undo {addon_id}`.",
+      failures.len()
+    ));
   }
 
   lock.remove_addon(addon_id);
@@ -776,6 +822,12 @@ pub async fn update_addon(
 
   println!("Updating '{addon_id}' v{current} → v{latest}...");
 
+  install_addon(ctx, addon_id).await.with_context(|| {
+    format!(
+      "Failed to fetch addon '{addon_id}' v{latest}; the currently-applied v{current} is unaffected"
+    )
+  })?;
+
   if had_journal {
     undo_addon(addon_id, project_root, true)?;
   } else {
@@ -784,7 +836,6 @@ pub async fn update_addon(
     lock.save(project_root)?;
     let _ = AnesisManifest::remove_addon(addon_id, project_root);
   }
-  install_addon(ctx, addon_id).await?;
 
   for cmd in &commands {
     run_addon_command(
@@ -796,11 +847,30 @@ pub async fn update_addon(
       non_interactive,
       false,
     )
-    .await?;
+    .await
+    .with_context(|| {
+      format!(
+        "addon '{addon_id}' was updated to v{latest} and its old files were reverted, but \
+         re-applying command '{cmd}' failed; commands before it in this list were re-applied \
+         successfully — fix the issue above, then run `anesis use {addon_id} <command>` for \
+         any that still need it"
+      )
+    })?;
   }
 
   println!("✓ Updated '{addon_id}' to v{latest}.");
   Ok(())
+}
+
+fn describe_rollback(rollback: &Rollback) -> String {
+  match rollback {
+    Rollback::DeleteCreatedFile { path } => format!("delete {}", path.display()),
+    Rollback::RestoreFile { path, .. } => format!("restore {}", path.display()),
+    Rollback::RenameFile { from, to } => {
+      format!("rename {} back to {}", to.display(), from.display())
+    }
+    Rollback::IrreversibleRun { command } => format!("(irreversible) {command}"),
+  }
 }
 
 pub fn apply_rollback(rollback: Rollback, project_root: &Path) -> Result<()> {

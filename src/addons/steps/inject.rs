@@ -1,11 +1,11 @@
 use std::path::Path;
 
-use anyhow::{Result, anyhow};
+use anyhow::anyhow;
 use inquire::Select;
 
 use crate::addons::manifest::{IfNotFound, InjectStep};
 
-use super::{Rollback, render_string, resolve_target};
+use super::{Rollback, StepFailure, StepResult, render_string, resolve_target};
 
 fn normalize_whitespace(s: &str) -> String {
   s.split_whitespace().collect::<Vec<_>>().join(" ")
@@ -15,11 +15,12 @@ pub fn execute_inject(
   step: &InjectStep,
   project_root: &Path,
   ctx: &tera::Context,
-) -> Result<Vec<Rollback>> {
+  non_interactive: bool,
+) -> StepResult {
   if step.after.is_some() && step.before.is_some() {
-    return Err(anyhow!(
+    return Err(StepFailure::without_rollbacks(anyhow!(
       "inject step cannot set both 'after' and 'before'; choose one marker"
-    ));
+    )));
   }
 
   let paths = resolve_target(&step.target, project_root, ctx)?;
@@ -31,13 +32,22 @@ pub fn execute_inject(
   let mut rollbacks = Vec::new();
 
   for path in paths {
-    let original = std::fs::read(&path)?;
-    let text = std::str::from_utf8(&original).map_err(|_| {
-      anyhow!(
-        "{} is not valid UTF-8 (binary file); refusing to inject",
-        path.display()
-      )
-    })?;
+    let original = match std::fs::read(&path) {
+      Ok(o) => o,
+      Err(e) => return Err(StepFailure::new(e, rollbacks)),
+    };
+    let text = match std::str::from_utf8(&original) {
+      Ok(t) => t,
+      Err(_) => {
+        return Err(StepFailure::new(
+          anyhow!(
+            "{} is not valid UTF-8 (binary file); refusing to inject",
+            path.display()
+          ),
+          rollbacks,
+        ));
+      }
+    };
     let mut file_lines: Vec<String> = text.lines().map(str::to_string).collect();
 
     let marker = step.after.as_deref().or(step.before.as_deref());
@@ -57,10 +67,9 @@ pub fn execute_inject(
         None => match step.if_not_found {
           IfNotFound::Skip => continue,
           IfNotFound::Error => {
-            return Err(anyhow!(
-              "Marker {:?} not found in {}",
-              marker,
-              path.display()
+            return Err(StepFailure::new(
+              anyhow!("Marker {:?} not found in {}", marker, path.display()),
+              rollbacks,
             ));
           }
           IfNotFound::WarnAndAsk => {
@@ -69,10 +78,18 @@ pub fn execute_inject(
               marker,
               path.display()
             );
+            if non_interactive {
+              continue;
+            }
             let choice =
-              Select::new("How would you like to proceed?", vec!["Continue", "Abort"]).prompt()?;
+              match Select::new("How would you like to proceed?", vec!["Continue", "Abort"])
+                .prompt()
+              {
+                Ok(c) => c,
+                Err(e) => return Err(StepFailure::new(e, rollbacks)),
+              };
             if choice == "Abort" {
-              return Err(anyhow!("Aborted by user"));
+              return Err(StepFailure::new(anyhow!("Aborted by user"), rollbacks));
             }
             continue;
           }
@@ -93,7 +110,9 @@ pub fn execute_inject(
     if had_trailing_newline {
       new_content.push('\n');
     }
-    std::fs::write(&path, new_content)?;
+    if let Err(e) = std::fs::write(&path, new_content) {
+      return Err(StepFailure::new(e, rollbacks));
+    }
   }
 
   Ok(rollbacks)

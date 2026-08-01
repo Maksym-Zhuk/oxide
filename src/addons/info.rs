@@ -82,6 +82,11 @@ fn print_addon_info(m: &AddonManifest) {
   }
 }
 
+#[doc(hidden)]
+pub fn input_line_for_tests(input: &InputDef) -> String {
+  input_line(input)
+}
+
 fn input_line(input: &InputDef) -> String {
   let ty = match input.input_type {
     InputType::Text => "text",
@@ -104,6 +109,11 @@ fn input_line(input: &InputDef) -> String {
     format!(" ({})", extra.join(", "))
   };
   format!("{}: {}{}", input.name.cyan(), ty, suffix.dimmed())
+}
+
+#[doc(hidden)]
+pub fn step_label_for_tests(step: &Step) -> String {
+  step_label(step)
 }
 
 fn step_label(step: &Step) -> String {

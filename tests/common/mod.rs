@@ -1,5 +1,7 @@
 #![allow(unused_imports)]
 
+pub mod fixture;
+
 pub use anesis::auth::login::{generate_state_token_for_tests, write_auth_file_for_tests};
 pub use anesis::auth::token::is_token_expired_for_tests;
 

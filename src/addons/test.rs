@@ -53,6 +53,15 @@ pub async fn test_addon(
   Ok(())
 }
 
+#[doc(hidden)]
+pub fn resolve_fixture_for_tests(
+  ctx: &AppContext,
+  addon_id: &str,
+  project: Option<String>,
+) -> Result<PathBuf> {
+  resolve_fixture(ctx, addon_id, project)
+}
+
 fn resolve_fixture(ctx: &AppContext, addon_id: &str, project: Option<String>) -> Result<PathBuf> {
   if let Some(p) = project {
     let path = PathBuf::from(&p);

@@ -72,13 +72,13 @@ jobs:
               with:
                   key: coverage
 
-            - name: Install cargo-llvm-cov
+            - name: Install cargo-llvm-cov and cargo-nextest
               uses: taiki-e/install-action@v2
               with:
-                  tool: cargo-llvm-cov
+                  tool: cargo-llvm-cov,cargo-nextest
 
             - name: Measure and enforce
-              run: cargo llvm-cov --summary-only --fail-under-lines 45
+              run: cargo llvm-cov nextest --summary-only --fail-under-lines 68
 
     registry-lint-tool:
         name: registry-lint tool
@@ -155,3 +155,41 @@ jobs:
             - name: cargo audit (registry-lint tool)
               working-directory: tools/registry-lint
               run: cargo audit
+
+    mutants:
+        name: Mutation testing (weekly)
+        runs-on: ubuntu-latest
+        if: github.event_name == 'schedule'
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Cache cargo build
+              uses: Swatinem/rust-cache@v2
+              with:
+                  key: mutants
+
+            - name: Install cargo-mutants
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-mutants
+
+            - name: cargo mutants
+              run: |
+                  cargo mutants \
+                    --file 'src/addons/steps/**' \
+                    --file 'src/addons/runner.rs' \
+                    --file 'src/utils/archive.rs' \
+                    --file 'src/utils/validate.rs' \
+                    --file 'src/addons/lock.rs' \
+                    --timeout 60
+
+            - name: Upload mutants report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: mutants-report
+                  path: mutants.out

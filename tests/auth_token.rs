@@ -80,3 +80,48 @@ fn detects_expired_and_valid_tokens() {
   assert!(!is_token_expired_for_tests(&token_with_exp(now + 3600)));
   assert!(!is_token_expired_for_tests("not-a-jwt"));
 }
+
+#[test]
+fn anesis_token_env_var_short_circuits_the_auth_file_entirely() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let auth_path = dir.path().join("never-read.json"); // deliberately missing
+
+  unsafe { std::env::set_var("ANESIS_TOKEN", "env-token") };
+  let user = get_auth_user(&auth_path);
+  unsafe { std::env::remove_var("ANESIS_TOKEN") };
+
+  let user = user.expect("ANESIS_TOKEN must be honored even when the auth file doesn't exist");
+  assert_eq!(user.token, "env-token");
+  assert_eq!(user.name, "token");
+}
+
+#[test]
+fn anesis_token_is_trimmed_of_surrounding_whitespace() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let auth_path = dir.path().join("never-read.json");
+
+  unsafe { std::env::set_var("ANESIS_TOKEN", "  env-token  \n") };
+  let user = get_auth_user(&auth_path);
+  unsafe { std::env::remove_var("ANESIS_TOKEN") };
+
+  assert_eq!(user.unwrap().token, "env-token");
+}
+
+#[test]
+fn an_empty_anesis_token_falls_back_to_the_auth_file() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let auth_file = dir.child("auth.json");
+  auth_file
+    .write_str(r#"{"token":"file-token","name":"alice"}"#)
+    .unwrap();
+
+  unsafe { std::env::set_var("ANESIS_TOKEN", "   ") };
+  let user = get_auth_user(auth_file.path());
+  unsafe { std::env::remove_var("ANESIS_TOKEN") };
+
+  assert_eq!(
+    user.unwrap().token,
+    "file-token",
+    "whitespace-only ANESIS_TOKEN must be treated as unset"
+  );
+}

@@ -51,6 +51,11 @@ fn dispatch(method: &str, params: Option<&Value>) -> Result<Value, (i64, String)
   }
 }
 
+#[doc(hidden)]
+pub fn dispatch_for_tests(method: &str, params: Option<&Value>) -> Result<Value, (i64, String)> {
+  dispatch(method, params)
+}
+
 fn call_tool(params: Option<&Value>) -> Result<Value, (i64, String)> {
   let params = params.ok_or((-32602, "Missing params".to_string()))?;
   let name = params
@@ -69,7 +74,7 @@ fn call_tool(params: Option<&Value>) -> Result<Value, (i64, String)> {
   }))
 }
 
-fn run_tool(name: &str, args: &Value) -> (String, bool) {
+fn build_argv(name: &str, args: &Value) -> Result<Vec<String>, String> {
   let s = |k: &str| {
     args
       .get(k)
@@ -77,9 +82,8 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
       .unwrap_or("")
       .to_string()
   };
-  let cwd = args.get("path").and_then(Value::as_str).map(String::from);
 
-  let mut cmd: Vec<String> = match name {
+  match name {
     "search_registry" => {
       let mut v = vec!["search".to_string()];
       let q = s("query");
@@ -87,30 +91,25 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
         v.push(q);
       }
       v.push("--json".to_string());
-      v
+      Ok(v)
     }
     "get_manifest" => {
       let kind = s("kind");
       let id = s("id");
       if id.is_empty() {
-        return ("'id' is required".to_string(), true);
+        return Err("'id' is required".to_string());
       }
       match kind.as_str() {
-        "template" => vec!["template".into(), "info".into(), id, "--json".into()],
-        "addon" => vec!["addon".into(), "info".into(), id, "--json".into()],
-        "stack" => vec!["stack".into(), "info".into(), id, "--json".into()],
-        other => {
-          return (
-            format!("Unknown kind '{other}'; use template|addon|stack"),
-            true,
-          );
-        }
+        "template" => Ok(vec!["template".into(), "info".into(), id, "--json".into()]),
+        "addon" => Ok(vec!["addon".into(), "info".into(), id, "--json".into()]),
+        "stack" => Ok(vec!["stack".into(), "info".into(), id, "--json".into()]),
+        other => Err(format!("Unknown kind '{other}'; use template|addon|stack")),
       }
     }
     "scaffold_project" => {
       let project = s("name");
       if project.is_empty() {
-        return ("'name' is required".to_string(), true);
+        return Err("'name' is required".to_string());
       }
       let mut v = vec!["new".to_string(), project];
       let stack = s("stack");
@@ -121,29 +120,29 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
       } else if !template.is_empty() {
         v.push(template);
       } else {
-        return ("Provide either 'template' or 'stack'".to_string(), true);
+        return Err("Provide either 'template' or 'stack'".to_string());
       }
       v.push("--yes".into());
       push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
-      v
+      Ok(v)
     }
     "apply_addon" => {
       let id = s("addon_id");
       let command = s("command");
       if id.is_empty() || command.is_empty() {
-        return ("'addon_id' and 'command' are required".to_string(), true);
+        return Err("'addon_id' and 'command' are required".to_string());
       }
       let mut v = vec!["use".to_string(), id, command, "--yes".into()];
       push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
-      v
+      Ok(v)
     }
     "apply_stack" => {
       let project = s("name");
       let stack = s("stack");
       if project.is_empty() || stack.is_empty() {
-        return ("'name' and 'stack' are required".to_string(), true);
+        return Err("'name' and 'stack' are required".to_string());
       }
       let mut v = vec![
         "new".to_string(),
@@ -154,13 +153,24 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
       ];
       push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
-      v
+      Ok(v)
     }
-    "project_status" => vec!["status".into(), "--json".into()],
-    other => return (format!("Unknown tool '{other}'"), true),
-  };
+    "project_status" => Ok(vec!["status".into(), "--json".into()]),
+    other => Err(format!("Unknown tool '{other}'")),
+  }
+}
 
-  run_self(&mut cmd, cwd.as_deref())
+#[doc(hidden)]
+pub fn build_argv_for_tests(name: &str, args: &Value) -> Result<Vec<String>, String> {
+  build_argv(name, args)
+}
+
+fn run_tool(name: &str, args: &Value) -> (String, bool) {
+  let cwd = args.get("path").and_then(Value::as_str).map(String::from);
+  match build_argv(name, args) {
+    Ok(mut cmd) => run_self(&mut cmd, cwd.as_deref()),
+    Err(message) => (message, true),
+  }
 }
 
 fn push_allow_run(cmd: &mut Vec<String>, args: &Value) {
