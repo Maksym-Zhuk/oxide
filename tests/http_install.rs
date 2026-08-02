@@ -29,14 +29,13 @@ async fn a_failed_download_leaves_the_old_version_completely_untouched() {
   std::fs::write(&x, "v1-content").unwrap();
 
   let mut lock = LockFile::load(fx.project.path()).unwrap();
-  lock.addons.push(LockEntry {
-    id: "fixture-addon".to_string(),
-    version: "1.0.0".to_string(),
-    variant: "universal".to_string(),
-    commands_executed: vec!["install".to_string()],
-    journal: vec![Rollback::DeleteCreatedFile { path: x.clone() }],
-    inputs: HashMap::new(),
-  });
+  let mut entry = LockEntry::new("fixture-addon", "1.0.0", "universal");
+  entry.upsert_command(
+    "install",
+    HashMap::new(),
+    vec![Rollback::DeleteCreatedFile { path: x.clone() }],
+  );
+  lock.addons.push(entry);
   lock.save(fx.project.path()).unwrap();
 
   let ctx = fx.mock_ctx(&server);
@@ -62,5 +61,5 @@ async fn a_failed_download_leaves_the_old_version_completely_untouched() {
     .find(|e| e.id == "fixture-addon")
     .expect("the old lock entry must still be present");
   assert_eq!(entry.version, "1.0.0");
-  assert_eq!(entry.journal.len(), 1);
+  assert!(entry.has_undoable_changes());
 }

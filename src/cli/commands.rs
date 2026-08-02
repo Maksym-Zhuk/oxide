@@ -60,6 +60,14 @@ pub enum AddonCommands {
   Remove { addon_id: String },
 
   #[command(
+    about = "Check a local addon directory for common manifest mistakes (missing copy sources, unknown requires_commands, test-fixture anchors that won't match)"
+  )]
+  Lint {
+    #[arg(help = "Path to the addon directory (defaults to the current directory)")]
+    path: Option<String>,
+  },
+
+  #[command(
     visible_alias = "p",
     about = "Publish a GitHub repository as an Anesis addon"
   )]
@@ -329,6 +337,12 @@ pub enum Commands {
 
     #[arg(short, long, help = "Accept all defaults, skip confirmation prompts")]
     yes: bool,
+
+    #[arg(
+      long,
+      help = "Allow overwriting existing files in the destination directory"
+    )]
+    overwrite: bool,
 
     #[arg(
       long,

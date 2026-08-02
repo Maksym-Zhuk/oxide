@@ -91,6 +91,12 @@ fn detect_pm(root: &Path) -> Result<PackageManager> {
   }
 }
 
+fn missing_pm_error(program: &str, err: which::Error) -> anyhow::Error {
+  anyhow::Error::new(err).context(format!(
+    "'{program}' was not found on PATH — is it installed?"
+  ))
+}
+
 pub fn execute_packages(
   step: &PackagesStep,
   project_root: &Path,
@@ -114,7 +120,11 @@ fn execute_packages_inner(
 
   if !allow_run {
     let summary = describe_install(&pm, step);
-    println!("  {} {}", "will run:".dimmed(), summary.yellow());
+    println!(
+      "  {} {}",
+      "will run:".dimmed(),
+      crate::utils::sanitize::sanitize_for_display(&summary).yellow()
+    );
 
     if non_interactive {
       bail!(
@@ -136,19 +146,11 @@ fn execute_packages_inner(
   for name in pm.snapshot_files() {
     let path = project_root.join(name);
     if path.exists() {
-      rollbacks.push(Rollback::RestoreFile {
-        path: path.clone(),
-        original: std::fs::read(&path)?,
-      });
+      rollbacks.push(Rollback::restore_file(path.clone(), std::fs::read(&path)?));
     }
   }
 
-  let program = which::which(pm.program()).with_context(|| {
-    format!(
-      "'{}' was not found on PATH — is it installed?",
-      pm.program()
-    )
-  })?;
+  let program = which::which(pm.program()).map_err(|e| missing_pm_error(pm.program(), e))?;
 
   let run = |extra: &[&str], specs: &[String]| -> Result<()> {
     let status = Command::new(&program)
@@ -181,7 +183,7 @@ fn execute_packages_inner(
 
   if let Err(err) = result {
     for rb in rollbacks.iter().rev() {
-      if let Rollback::RestoreFile { path, original } = rb {
+      if let Rollback::RestoreFile { path, original, .. } = rb {
         let _ = std::fs::write(path, original);
       }
     }
@@ -193,4 +195,9 @@ fn execute_packages_inner(
 
 pub fn detect_pm_for_tests(root: &Path) -> Result<&'static str> {
   detect_pm(root).map(|pm| pm.program())
+}
+
+#[doc(hidden)]
+pub fn missing_pm_error_for_tests(program: &str, err: which::Error) -> anyhow::Error {
+  missing_pm_error(program, err)
 }

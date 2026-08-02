@@ -380,6 +380,56 @@ fn yaml_contains_value_no_match_when_different() {
 }
 
 #[test]
+fn yaml_contains_matches_a_boolean_value_by_its_string_form() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir
+    .child("config.yaml")
+    .write_str("enabled: true\n")
+    .unwrap();
+
+  let detect = vec![DetectBlock {
+    id: "enabled".into(),
+    rules: vec![DetectRule::YamlContains {
+      file: "config.yaml".into(),
+      key_path: "enabled".into(),
+      value: Some("true".into()),
+      negate: false,
+    }],
+    match_mode: MatchMode::Any,
+  }];
+
+  assert_eq!(
+    detect_variant(&detect, dir.path()),
+    Some("enabled".into()),
+    "the YAML backend's bool Display formatting must stay pinned to plain 'true'/'false'"
+  );
+}
+
+#[test]
+fn yaml_contains_matches_an_integer_value_by_its_string_form() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  dir.child("config.yaml").write_str("port: 3000\n").unwrap();
+
+  let detect = vec![DetectBlock {
+    id: "port".into(),
+    rules: vec![DetectRule::YamlContains {
+      file: "config.yaml".into(),
+      key_path: "port".into(),
+      value: Some("3000".into()),
+      negate: false,
+    }],
+    match_mode: MatchMode::Any,
+  }];
+
+  assert_eq!(
+    detect_variant(&detect, dir.path()),
+    Some("port".into()),
+    "the YAML backend's number Display formatting must stay pinned to a plain integer, \
+     with no trailing '.0' or scientific notation"
+  );
+}
+
+#[test]
 fn yaml_contains_missing_file_no_match() {
   let dir = assert_fs::TempDir::new().unwrap();
 

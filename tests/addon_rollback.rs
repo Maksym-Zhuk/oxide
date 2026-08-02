@@ -1,7 +1,12 @@
 mod common;
 
-use anesis::addons::lock::{LockEntry, LockFile};
-use anesis::addons::runner::{run_addon_command, undo_addon};
+#[cfg(unix)]
+use anesis::addons::lock::LockEntry;
+use anesis::addons::lock::LockFile;
+use anesis::addons::runner::run_addon_command;
+#[cfg(unix)]
+use anesis::addons::runner::undo_addon;
+#[cfg(unix)]
 use anesis::addons::steps::Rollback;
 use assert_fs::prelude::*;
 use common::fixture::{Fixture, build};
@@ -89,15 +94,19 @@ async fn a_lock_save_failure_rolls_back_the_commands_file_changes() {
 
   let lock_path = fx.project.path().join("anesis.lock");
   std::fs::write(&lock_path, r#"{"addons":[]}"#).unwrap();
-  std::fs::set_permissions(&lock_path, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+  let subdir = fx.project.path().join("subdir");
+  std::fs::create_dir_all(&subdir).unwrap();
 
   let manifest = reversible_addon_with_steps(
     "fixture-addon",
     serde_json::json!([
-      { "type": "create", "path": "created.txt", "content": "hello\n", "if_exists": "overwrite" }
+      { "type": "create", "path": "subdir/created.txt", "content": "hello\n", "if_exists": "overwrite" }
     ]),
   );
   fx.install_addon("fixture-addon", &manifest);
+
+  std::fs::set_permissions(fx.project.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
 
   let result = run_addon_command(
     &fx.offline_ctx(),
@@ -110,15 +119,15 @@ async fn a_lock_save_failure_rolls_back_the_commands_file_changes() {
   )
   .await;
 
-  std::fs::set_permissions(&lock_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+  std::fs::set_permissions(fx.project.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
 
-  let err = result.expect_err("a read-only anesis.lock must fail the save");
+  let err = result.expect_err("a read-only project root must fail the lock save");
   assert!(
     format!("{err:#}").contains("Failed to save anesis.lock"),
     "unexpected error: {err:#}"
   );
   assert!(
-    !fx.project.path().join("created.txt").exists(),
+    !subdir.join("created.txt").exists(),
     "a lock-save failure must roll back the fully-applied file changes — otherwise the \
      project ends up with created.txt on disk but no lock entry to undo it with"
   );
@@ -148,27 +157,32 @@ fn undo_makes_progress_on_every_entry_it_can_and_keeps_the_rest_for_retry() {
   std::fs::set_permissions(&y, std::fs::Permissions::from_mode(0o444)).unwrap();
 
   let mut lock = LockFile::load(fx.project.path()).unwrap();
-  lock.addons.push(LockEntry {
-    id: "fixture-addon".to_string(),
-    version: "1.0.0".to_string(),
-    variant: "universal".to_string(),
-    commands_executed: vec!["install".to_string()],
-    journal: vec![
+  let mut entry = LockEntry::new("fixture-addon", "1.0.0", "universal");
+  entry.upsert_command(
+    "install",
+    HashMap::new(),
+    vec![
       Rollback::RestoreFile {
         path: x.clone(),
         original: b"orig-x".to_vec(),
+        mode: None,
+        is_symlink: false,
       },
       Rollback::RestoreFile {
         path: y.clone(),
         original: b"orig-y".to_vec(),
+        mode: None,
+        is_symlink: false,
       },
       Rollback::RestoreFile {
         path: z.clone(),
         original: b"orig-z".to_vec(),
+        mode: None,
+        is_symlink: false,
       },
     ],
-    inputs: HashMap::new(),
-  });
+  );
+  lock.addons.push(entry);
   lock.save(fx.project.path()).unwrap();
 
   let err = undo_addon("fixture-addon", fx.project.path(), true)
@@ -193,14 +207,19 @@ fn undo_makes_progress_on_every_entry_it_can_and_keeps_the_rest_for_retry() {
     .iter()
     .find(|e| e.id == "fixture-addon")
     .expect("a partially-undone addon must still be recorded in the lock");
+  let remaining_journal: Vec<&Rollback> = entry
+    .commands
+    .iter()
+    .flat_map(|c| c.journal.iter())
+    .collect();
   assert_eq!(
-    entry.journal.len(),
+    remaining_journal.len(),
     1,
     "only the failed entry should remain — x.txt and z.txt already succeeded and must not \
      be retried (RenameFile rollbacks are not idempotent on a second application)"
   );
   assert!(matches!(
-    &entry.journal[0],
+    remaining_journal[0],
     Rollback::RestoreFile { path, .. } if path == &y
   ));
 
@@ -212,5 +231,51 @@ fn undo_makes_progress_on_every_entry_it_can_and_keeps_the_rest_for_retry() {
   assert!(
     !lock.addons.iter().any(|e| e.id == "fixture-addon"),
     "a fully-undone addon must be removed from the lock"
+  );
+}
+
+#[test]
+#[cfg(unix)]
+fn undo_restores_file_mode_and_recreates_symlinks() {
+  let fx = Fixture::new();
+  fx.seed_project();
+
+  let root = fx.project.path().canonicalize().unwrap();
+  let script = root.join("script.sh");
+  let link = root.join("link.txt");
+
+  let mut lock = LockFile::load(fx.project.path()).unwrap();
+  let mut entry = LockEntry::new("fixture-addon", "1.0.0", "universal");
+  entry.upsert_command(
+    "install",
+    HashMap::new(),
+    vec![
+      Rollback::RestoreFile {
+        path: script.clone(),
+        original: b"#!/bin/sh\necho hi".to_vec(),
+        mode: Some(0o755),
+        is_symlink: false,
+      },
+      Rollback::RestoreFile {
+        path: link.clone(),
+        original: b"real.txt".to_vec(),
+        mode: None,
+        is_symlink: true,
+      },
+    ],
+  );
+  lock.addons.push(entry);
+  lock.save(fx.project.path()).unwrap();
+
+  undo_addon("fixture-addon", fx.project.path(), true).unwrap();
+
+  let meta = std::fs::metadata(&script).unwrap();
+  assert_eq!(meta.permissions().mode() & 0o777, 0o755);
+
+  let link_meta = std::fs::symlink_metadata(&link).unwrap();
+  assert!(link_meta.file_type().is_symlink());
+  assert_eq!(
+    std::fs::read_link(&link).unwrap(),
+    std::path::Path::new("real.txt")
   );
 }

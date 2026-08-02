@@ -165,6 +165,8 @@ async fn get_addon_url_raw(
 }
 
 pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInstallResult> {
+  let addon_dir = ctx.paths.addon_dir(addon_id)?;
+
   let sp = spinner(format!("Fetching info for addon '{addon_id}'..."));
   let info = get_addon_url(ctx, addon_id)
     .await
@@ -172,7 +174,6 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
   sp.finish_and_clear();
 
   let addons_dir = &ctx.paths.addons;
-  let addon_dir = addons_dir.join(addon_id);
   let cached_addon = get_cached_addon(addons_dir, addon_id)
     .with_context(|| format!("Failed to read addons cache while checking '{addon_id}'"))?;
   let install_state =

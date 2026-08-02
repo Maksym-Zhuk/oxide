@@ -23,7 +23,7 @@ use anesis::{
   },
   upgrade::{check_cli_version_cached, render_upgrade_notice, upgrade_cli},
   utils::{
-    errors::{exit_code_for, print_error},
+    errors::{AnesisError, exit_code_for, print_error},
     picker::{self, ItemKind, PickItem, pick_one},
     ui::spinner,
     validate::{is_valid_github_repo_url, validate_project_name, validate_template_name},
@@ -115,20 +115,21 @@ async fn run() -> Result<()> {
       stack,
       installed,
       yes,
+      overwrite,
       input,
     } => {
       validate_project_name(&name)?;
       let inputs = parse_inputs(&input)?;
       if let Some(stack_ref) = stack {
         let stack = anesis::stacks::cache::resolve_stack(&ctx, &stack_ref).await?;
-        apply_stack(&ctx, &name, &stack, yes, &inputs).await?;
+        apply_stack(&ctx, &name, &stack, yes, overwrite, &inputs).await?;
       } else {
         let template_name = match template_name {
           Some(template_name) => template_name,
           None => choose_template(&ctx, installed, "Select a template").await?,
         };
         validate_template_name(&template_name)?;
-        create_new_project(&ctx, &name, &template_name, yes, &inputs).await?;
+        create_new_project(&ctx, &name, &template_name, yes, overwrite, &inputs).await?;
       }
     }
     Commands::Template { command } => match command {
@@ -264,6 +265,18 @@ async fn run() -> Result<()> {
       }
       AddonCommands::Remove { addon_id } => {
         addons::cache::remove_addon_from_cache(&ctx.paths.addons, &addon_id)?;
+      }
+      AddonCommands::Lint { path } => {
+        let dir = std::path::PathBuf::from(path.as_deref().unwrap_or("."));
+        let errors = addons::lint::lint_addon(&dir)?;
+        if errors.is_empty() {
+          println!("✅ No issues found.");
+        } else {
+          for error in &errors {
+            eprintln!("{} {error}", "✗".red().bold());
+          }
+          anyhow::bail!("{} issue(s) found in {}", errors.len(), dir.display());
+        }
       }
       AddonCommands::Publish {
         addon_url,
@@ -541,10 +554,11 @@ async fn apply_stack(
   project_name: &str,
   stack: &anesis::stacks::manifest::StackManifest,
   yes: bool,
+  overwrite: bool,
   inputs: &std::collections::HashMap<String, String>,
 ) -> Result<()> {
   println!("Creating '{project_name}' from stack '{}'...", stack.name);
-  create_new_project(ctx, project_name, &stack.template, yes, inputs).await?;
+  create_new_project(ctx, project_name, &stack.template, yes, overwrite, inputs).await?;
 
   let project_root = if project_name == "." {
     std::env::current_dir()?
@@ -587,6 +601,7 @@ async fn create_new_project(
   project_name: &str,
   template_name: &str,
   yes: bool,
+  overwrite: bool,
   presets: &std::collections::HashMap<String, String>,
 ) -> Result<()> {
   let files = get_files(ctx, template_name).await?;
@@ -607,7 +622,7 @@ async fn create_new_project(
   };
 
   let overwrites = overwritten_paths(&files, &output_path, &excluded)?;
-  if !overwrites.is_empty() && !yes {
+  if !overwrites.is_empty() && !overwrite {
     println!(
       "⚠ Generating here will overwrite {} existing file(s):",
       overwrites.len()
@@ -618,12 +633,17 @@ async fn create_new_project(
     if overwrites.len() > 20 {
       println!("  ...and {} more", overwrites.len() - 20);
     }
+    if yes {
+      anyhow::bail!(
+        "Refusing to overwrite {} existing file(s) non-interactively. Pass --overwrite to allow it.",
+        overwrites.len()
+      );
+    }
     if !Confirm::new("Continue and overwrite these files?")
       .with_default(false)
       .prompt()?
     {
-      println!("Aborted. No changes were made.");
-      return Ok(());
+      return Err(AnesisError::Aborted.into());
     }
   }
 

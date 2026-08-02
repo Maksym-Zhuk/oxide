@@ -51,7 +51,7 @@ pub fn extract_template(
   context.insert("project_name_snake", &to_snake_case(project_name));
   insert_inputs(&mut context, inputs);
 
-  let mut tera = Tera::default();
+  let mut tera = crate::utils::tera_sandbox::hardened_tera();
 
   let result = extract_dir_contents(files, output_path, &mut tera, &context, ctx, excluded);
 

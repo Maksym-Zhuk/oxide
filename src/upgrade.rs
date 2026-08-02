@@ -61,7 +61,7 @@ pub async fn upgrade_cli(ctx: &AppContext) -> Result<()> {
   }
 
   let platform = current_platform()?;
-  let asset_url = release_asset_url(&latest_version, platform)?;
+  let asset_url = release_asset_url(&releases_download_base_url(), &latest_version, platform)?;
   let current_exe = env::current_exe().context("Failed to locate the current Anesis executable")?;
 
   let sp = spinner(format!("Downloading Anesis v{latest_version}..."));
@@ -83,8 +83,8 @@ pub async fn upgrade_cli(ctx: &AppContext) -> Result<()> {
   sp.finish_and_clear();
 
   let sp = spinner("Verifying checksum...");
-  let checksums_url =
-    release_checksums_url(&latest_version).inspect_err(|_| sp.finish_and_clear())?;
+  let checksums_url = release_checksums_url(&releases_download_base_url(), &latest_version)
+    .inspect_err(|_| sp.finish_and_clear())?;
   let checksums = ctx
     .client
     .get(&checksums_url)
@@ -113,8 +113,27 @@ pub async fn upgrade_cli(ctx: &AppContext) -> Result<()> {
   mark_executable(&temp_exe)?;
   replace_current_executable(&current_exe, &temp_exe)?;
 
-  println!("✓ Anesis updated to v{latest_version}. Restart your shell if needed.");
+  println!(
+    "{}",
+    upgrade_success_message(&latest_version, cfg!(windows))
+  );
   Ok(())
+}
+
+fn upgrade_success_message(latest_version: &str, deferred_swap: bool) -> String {
+  if deferred_swap {
+    format!(
+      "✓ Anesis v{latest_version} downloaded and verified; finishing the install in the \
+       background. Restart your shell in a few seconds."
+    )
+  } else {
+    format!("✓ Anesis updated to v{latest_version}. Restart your shell if needed.")
+  }
+}
+
+#[doc(hidden)]
+pub fn upgrade_success_message_for_tests(latest_version: &str, deferred_swap: bool) -> String {
+  upgrade_success_message(latest_version, deferred_swap)
 }
 
 pub async fn check_cli_version_cached(client: &Client, path: &Path) -> Result<Option<String>> {
@@ -365,30 +384,26 @@ pub fn asset_filename_for_tests(platform: &str) -> String {
   asset_filename(platform)
 }
 
-fn release_asset_url(version: &str, platform: &str) -> Result<String> {
-  let url = format!(
-    "{}/v{version}/{}",
-    releases_download_base_url(),
-    asset_filename(platform)
-  );
+fn release_asset_url(base: &str, version: &str, platform: &str) -> Result<String> {
+  let url = format!("{base}/v{version}/{}", asset_filename(platform));
   crate::utils::validate::require_https_url(&url, "release asset URL")?;
   Ok(url)
 }
 
 #[doc(hidden)]
-pub fn release_asset_url_for_tests(version: &str, platform: &str) -> Result<String> {
-  release_asset_url(version, platform)
+pub fn release_asset_url_for_tests(base: &str, version: &str, platform: &str) -> Result<String> {
+  release_asset_url(base, version, platform)
 }
 
-fn release_checksums_url(version: &str) -> Result<String> {
-  let url = format!("{}/v{version}/SHA256SUMS", releases_download_base_url());
+fn release_checksums_url(base: &str, version: &str) -> Result<String> {
+  let url = format!("{base}/v{version}/SHA256SUMS");
   crate::utils::validate::require_https_url(&url, "release checksums URL")?;
   Ok(url)
 }
 
 #[doc(hidden)]
-pub fn release_checksums_url_for_tests(version: &str) -> Result<String> {
-  release_checksums_url(version)
+pub fn release_checksums_url_for_tests(base: &str, version: &str) -> Result<String> {
+  release_checksums_url(base, version)
 }
 
 fn expected_checksum(checksums: &str, asset_name: &str) -> Result<String> {
@@ -475,6 +490,7 @@ fn replace_current_executable(current_exe: &Path, temp_exe: &Path) -> Result<()>
 
 #[cfg(windows)]
 fn replace_current_executable(current_exe: &Path, temp_exe: &Path) -> Result<()> {
+  use std::os::windows::process::CommandExt;
   use std::process::Command;
 
   let updater_script =
@@ -483,9 +499,10 @@ fn replace_current_executable(current_exe: &Path, temp_exe: &Path) -> Result<()>
   fs::write(&updater_script, script)
     .with_context(|| format!("Failed to write {}", updater_script.display()))?;
 
-  let updater_script = path_for_shell(&updater_script)?;
+  let quoted_script = quoted_windows_path(&updater_script)?;
   Command::new("cmd")
-    .args(["/C", "start", "", "/B", updater_script.as_str()])
+    .arg("/C")
+    .raw_arg(format!("start \"\" /B {quoted_script}"))
     .spawn()
     .context("Failed to start the Windows updater helper")?;
   Ok(())

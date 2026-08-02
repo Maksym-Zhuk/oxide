@@ -61,6 +61,17 @@ fn project_name_reserved_windows() {
 }
 
 #[test]
+fn project_name_reserved_windows_with_extension() {
+  for name in ["CON.txt", "con.tar.gz", "NUL.md", "com1.json"] {
+    assert!(
+      validate_project_name(name).is_err(),
+      "{name} should be reserved, since Windows treats any extension on a \
+       device name as still referring to the device"
+    );
+  }
+}
+
+#[test]
 fn github_url_valid() {
   assert!(is_valid_github_repo_url("https://github.com/owner/repo").is_ok());
   assert!(is_valid_github_repo_url("https://github.com/anesis-dev/anesis").is_ok());
@@ -70,6 +81,13 @@ fn github_url_valid() {
 fn github_url_not_github_domain() {
   assert!(is_valid_github_repo_url("https://gitlab.com/owner/repo").is_err());
   assert!(is_valid_github_repo_url("https://example.com/owner/repo").is_err());
+}
+
+#[test]
+fn github_url_rejects_non_https_schemes() {
+  assert!(is_valid_github_repo_url("http://github.com/owner/repo").is_err());
+  assert!(is_valid_github_repo_url("ftp://github.com/owner/repo").is_err());
+  assert!(is_valid_github_repo_url("javascript:alert(1)").is_err());
 }
 
 #[test]

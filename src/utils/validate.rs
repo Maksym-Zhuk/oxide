@@ -47,8 +47,8 @@ pub fn validate_project_name(name: &str) -> Result<()> {
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
   ];
 
-  let uppercase_name = name.to_uppercase();
-  if reserved_windows.contains(&uppercase_name.as_str()) {
+  let stem = name.split('.').next().unwrap_or(name).to_uppercase();
+  if reserved_windows.contains(&stem.as_str()) {
     return Err(anyhow!("'{}' is a reserved name in Windows", name));
   }
 
@@ -59,6 +59,10 @@ pub fn is_valid_github_repo_url(input: &str) -> Result<()> {
   let Ok(url) = Url::parse(input) else {
     return Err(anyhow!("Invalid URL format"));
   };
+
+  if url.scheme() != "https" {
+    return Err(anyhow!("URL must use https"));
+  }
 
   if url.host_str() != Some("github.com") {
     return Err(anyhow!("URL is not a GitHub domain"));

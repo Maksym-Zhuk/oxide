@@ -1,6 +1,4 @@
-use anesis::utils::archive::{
-  download_and_extract, download_capped_for_tests as download_capped,
-};
+use anesis::utils::archive::{download_and_extract, download_capped_for_tests as download_capped};
 use wiremock::matchers::{header, method};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

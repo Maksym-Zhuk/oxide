@@ -30,9 +30,16 @@ fn execute_run_inner(
   let command = super::render_string(&step.command, ctx)?;
 
   if !step.description.is_empty() {
-    println!("  {}", step.description.dimmed());
+    println!(
+      "  {}",
+      crate::utils::sanitize::sanitize_for_display(&step.description).dimmed()
+    );
   }
-  println!("  {} {}", "will run:".dimmed(), command.yellow());
+  println!(
+    "  {} {}",
+    "will run:".dimmed(),
+    crate::utils::sanitize::sanitize_for_display(&command).yellow()
+  );
 
   if !allow_run {
     if non_interactive {

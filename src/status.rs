@@ -39,12 +39,9 @@ pub fn print_status(project_root: &Path) -> Result<()> {
       version.dimmed(),
       entry.variant.dimmed()
     );
-    if !entry.commands_executed.is_empty() {
-      println!(
-        "    {} {}",
-        "ran:".dimmed(),
-        entry.commands_executed.join(", ")
-      );
+    let commands_executed = entry.commands_executed();
+    if !commands_executed.is_empty() {
+      println!("    {} {}", "ran:".dimmed(), commands_executed.join(", "));
     }
   }
   Ok(())
@@ -61,7 +58,7 @@ pub fn status_json(project_root: &Path) -> Result<serde_json::Value> {
       "id": e.id,
       "version": e.version,
       "variant": e.variant,
-      "commands_executed": e.commands_executed,
+      "commands_executed": e.commands_executed(),
     })).collect::<Vec<_>>(),
   }))
 }

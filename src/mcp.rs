@@ -10,12 +10,28 @@ pub fn run_mcp() -> Result<()> {
   let mut out = stdout.lock();
 
   for line in stdin.lock().lines() {
-    let line = line?;
+    let line = match line {
+      Ok(line) => line,
+      Err(e) => {
+        eprintln!("anesis mcp: skipping unreadable line on stdin: {e}");
+        continue;
+      }
+    };
     if line.trim().is_empty() {
       continue;
     }
-    let Ok(req) = serde_json::from_str::<Value>(&line) else {
-      continue;
+    let req: Value = match serde_json::from_str(&line) {
+      Ok(req) => req,
+      Err(e) => {
+        let reply = json!({
+          "jsonrpc": "2.0",
+          "id": null,
+          "error": { "code": -32700, "message": format!("Parse error: {e}") }
+        });
+        writeln!(out, "{reply}")?;
+        out.flush()?;
+        continue;
+      }
     };
 
     let Some(id) = req.get("id").cloned() else {
@@ -123,6 +139,7 @@ fn build_argv(name: &str, args: &Value) -> Result<Vec<String>, String> {
         return Err("Provide either 'template' or 'stack'".to_string());
       }
       v.push("--yes".into());
+      push_overwrite(&mut v, args);
       push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
       Ok(v)
@@ -151,11 +168,30 @@ fn build_argv(name: &str, args: &Value) -> Result<Vec<String>, String> {
         stack,
         "--yes".into(),
       ];
+      push_overwrite(&mut v, args);
       push_allow_run(&mut v, args);
       push_inputs(&mut v, args);
       Ok(v)
     }
     "project_status" => Ok(vec!["status".into(), "--json".into()]),
+    "dry_run" => {
+      let id = s("addon_id");
+      let command = s("command");
+      if id.is_empty() || command.is_empty() {
+        return Err("'addon_id' and 'command' are required".to_string());
+      }
+      let mut v = vec!["use".to_string(), id, command, "--dry-run".into()];
+      push_inputs(&mut v, args);
+      Ok(v)
+    }
+    "undo_addon" => {
+      let id = s("addon_id");
+      if id.is_empty() {
+        return Err("'addon_id' is required".to_string());
+      }
+      Ok(vec!["undo".to_string(), id, "--yes".into()])
+    }
+    "list_outdated" => Ok(vec!["outdated".into(), "--json".into()]),
     other => Err(format!("Unknown tool '{other}'")),
   }
 }
@@ -176,6 +212,12 @@ fn run_tool(name: &str, args: &Value) -> (String, bool) {
 fn push_allow_run(cmd: &mut Vec<String>, args: &Value) {
   if args.get("allow_run").and_then(Value::as_bool) == Some(true) {
     cmd.push("--allow-run".to_string());
+  }
+}
+
+fn push_overwrite(cmd: &mut Vec<String>, args: &Value) {
+  if args.get("overwrite").and_then(Value::as_bool) == Some(true) {
+    cmd.push("--overwrite".to_string());
   }
 }
 
@@ -206,15 +248,15 @@ fn run_self(args: &mut [String], cwd: Option<&str>) -> (String, bool) {
 
   match cmd.output() {
     Ok(o) => {
-      let mut text = String::from_utf8_lossy(&o.stdout).into_owned();
-      let err = String::from_utf8_lossy(&o.stderr);
-      if !err.trim().is_empty() {
-        if !text.is_empty() {
-          text.push('\n');
-        }
-        text.push_str(&err);
-      }
-      (text.trim().to_string(), !o.status.success())
+      let stdout = String::from_utf8_lossy(&o.stdout).trim().to_string();
+      let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
+      let text = json!({
+        "exit_code": o.status.code(),
+        "stdout": stdout,
+        "stderr": stderr
+      })
+      .to_string();
+      (text, !o.status.success())
     }
     Err(e) => (format!("failed to run anesis: {e}"), true),
   }
@@ -227,6 +269,11 @@ pub fn push_inputs_for_tests(cmd: &mut Vec<String>, args: &Value) {
 #[doc(hidden)]
 pub fn push_allow_run_for_tests(cmd: &mut Vec<String>, args: &Value) {
   push_allow_run(cmd, args)
+}
+
+#[doc(hidden)]
+pub fn push_overwrite_for_tests(cmd: &mut Vec<String>, args: &Value) {
+  push_overwrite(cmd, args)
 }
 
 #[doc(hidden)]
@@ -269,6 +316,7 @@ fn tools_list() -> Value {
           "stack": { "type": "string", "description": "Stack id (alternative to template)" },
           "inputs": { "type": "object", "description": "Template input values by name", "additionalProperties": true },
           "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps (arbitrary shell) and 'packages' steps (package installs, which run lifecycle scripts) to execute. Defaults to false; ask the user before setting it." },
+          "overwrite": { "type": "boolean", "description": "Allow overwriting existing files in the destination directory. Defaults to false, which fails instead of silently clobbering files; ask the user before setting it." },
           "path": { "type": "string", "description": "Working directory to run in (defaults to the server's cwd)" }
         },
         "required": ["name"]
@@ -299,6 +347,7 @@ fn tools_list() -> Value {
           "stack": { "type": "string", "description": "Stack id" },
           "inputs": { "type": "object", "additionalProperties": true },
           "allow_run": { "type": "boolean", "description": "Permit addon 'run' steps (arbitrary shell) and 'packages' steps (package installs, which run lifecycle scripts) to execute. Defaults to false; ask the user before setting it." },
+          "overwrite": { "type": "boolean", "description": "Allow overwriting existing files in the destination directory. Defaults to false, which fails instead of silently clobbering files; ask the user before setting it." },
           "path": { "type": "string", "description": "Working directory to run in" }
         },
         "required": ["name", "stack"]
@@ -307,6 +356,42 @@ fn tools_list() -> Value {
     {
       "name": "project_status",
       "description": "Report the current project's template and applied addons as JSON.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Project directory to inspect" }
+        }
+      }
+    },
+    {
+      "name": "dry_run",
+      "description": "Preview an addon command's plan (variant, inputs, steps) without changing any files. Use this before apply_addon to see what would happen.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "addon_id": { "type": "string" },
+          "command": { "type": "string", "description": "Addon command to preview" },
+          "inputs": { "type": "object", "description": "Addon input values by name", "additionalProperties": true },
+          "path": { "type": "string", "description": "Project directory to run in" }
+        },
+        "required": ["addon_id", "command"]
+      }
+    },
+    {
+      "name": "undo_addon",
+      "description": "Revert an applied addon's changes in the current project, using the recorded rollback journal.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "addon_id": { "type": "string", "description": "Addon id to revert" },
+          "path": { "type": "string", "description": "Project directory to run in" }
+        },
+        "required": ["addon_id"]
+      }
+    },
+    {
+      "name": "list_outdated",
+      "description": "List applied addons that have a newer version in the registry, as JSON.",
       "inputSchema": {
         "type": "object",
         "properties": {

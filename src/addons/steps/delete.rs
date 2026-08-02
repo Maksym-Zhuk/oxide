@@ -9,27 +9,51 @@ pub fn execute_delete(step: &DeleteStep, project_root: &Path, ctx: &tera::Contex
   let mut rollbacks = Vec::new();
 
   for path in paths {
-    if path.is_dir() {
+    let meta = match path.symlink_metadata() {
+      Ok(m) => m,
+      Err(_) => {
+        eprintln!(
+          "Warning: delete target '{}' does not exist; skipping",
+          path.display()
+        );
+        continue;
+      }
+    };
+    if meta.is_dir() {
       eprintln!(
         "Warning: skipping '{}': deleting directories is not supported",
         path.display()
       );
       continue;
     }
-    if !path.exists() {
-      eprintln!(
-        "Warning: delete target '{}' does not exist; skipping",
-        path.display()
-      );
-      continue;
-    }
-    let original = match std::fs::read(&path) {
-      Ok(o) => o,
-      Err(e) => return Err(StepFailure::new(e, rollbacks)),
+
+    let is_symlink = meta.file_type().is_symlink();
+    let (original, mode) = if is_symlink {
+      let target = match std::fs::read_link(&path) {
+        Ok(t) => t,
+        Err(e) => return Err(StepFailure::new(e, rollbacks)),
+      };
+      (target.to_string_lossy().into_owned().into_bytes(), None)
+    } else {
+      let bytes = match std::fs::read(&path) {
+        Ok(o) => o,
+        Err(e) => return Err(StepFailure::new(e, rollbacks)),
+      };
+      #[cfg(unix)]
+      let mode = {
+        use std::os::unix::fs::PermissionsExt;
+        Some(meta.permissions().mode() & 0o777)
+      };
+      #[cfg(not(unix))]
+      let mode = None;
+      (bytes, mode)
     };
+
     rollbacks.push(Rollback::RestoreFile {
       path: path.clone(),
       original,
+      mode,
+      is_symlink,
     });
     if let Err(e) = std::fs::remove_file(&path) {
       return Err(StepFailure::new(e, rollbacks));

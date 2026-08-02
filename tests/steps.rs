@@ -13,7 +13,7 @@ use anesis::addons::{
   },
 };
 use assert_fs::prelude::*;
-use common::addon_detect_pm_for_tests;
+use common::{addon_detect_pm_for_tests, addon_missing_pm_error_for_tests};
 
 fn empty_ctx() -> tera::Context {
   tera::Context::new()
@@ -106,6 +106,35 @@ fn inject_after_marker() {
   assert_eq!(lines[0], "// imports");
   assert_eq!(lines[1], "import cors from 'cors';");
   assert_eq!(lines[2], "const app = express();");
+}
+
+#[test]
+fn inject_preserves_crlf_line_endings() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  std::fs::write(
+    dir.path().join("app.ts"),
+    "// imports\r\nconst app = express();\r\n",
+  )
+  .unwrap();
+
+  let step = InjectStep {
+    target: Target::File {
+      file: "app.ts".into(),
+    },
+    content: "import cors from 'cors';".into(),
+    after: Some("// imports".into()),
+    before: None,
+    if_not_found: IfNotFound::Error,
+  };
+
+  execute_inject(&step, dir.path(), &empty_ctx(), true).unwrap();
+
+  let result = std::fs::read(dir.path().join("app.ts")).unwrap();
+  let result = String::from_utf8(result).unwrap();
+  assert_eq!(
+    result, "// imports\r\nimport cors from 'cors';\r\nconst app = express();\r\n",
+    "a CRLF file must stay CRLF after inject, not get silently rewritten to LF"
+  );
 }
 
 #[test]
@@ -438,6 +467,67 @@ fn delete_rollback_stores_original_bytes() {
     Rollback::RestoreFile { original, .. } => assert_eq!(original, b"important data"),
     _ => panic!("expected RestoreFile rollback"),
   }
+}
+
+#[test]
+#[cfg(unix)]
+fn delete_rollback_captures_file_mode() {
+  use std::os::unix::fs::PermissionsExt;
+
+  let dir = assert_fs::TempDir::new().unwrap();
+  let path = dir.path().join("script.sh");
+  std::fs::write(&path, "#!/bin/sh\necho hi").unwrap();
+  std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+  let step = DeleteStep {
+    target: Target::File {
+      file: "script.sh".into(),
+    },
+  };
+  let rollbacks = execute_delete(&step, dir.path(), &empty_ctx()).unwrap();
+
+  match &rollbacks[0] {
+    Rollback::RestoreFile {
+      mode, is_symlink, ..
+    } => {
+      assert_eq!(*mode, Some(0o755));
+      assert!(!is_symlink);
+    }
+    _ => panic!("expected RestoreFile rollback"),
+  }
+}
+
+#[test]
+#[cfg(unix)]
+fn delete_rollback_captures_symlink_target_not_bytes() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  std::fs::write(dir.path().join("real.txt"), "real content").unwrap();
+  let link = dir.path().join("link.txt");
+  std::os::unix::fs::symlink("real.txt", &link).unwrap();
+
+  let step = DeleteStep {
+    target: Target::File {
+      file: "link.txt".into(),
+    },
+  };
+  let rollbacks = execute_delete(&step, dir.path(), &empty_ctx()).unwrap();
+
+  match &rollbacks[0] {
+    Rollback::RestoreFile {
+      original,
+      is_symlink,
+      ..
+    } => {
+      assert!(is_symlink);
+      assert_eq!(original, b"real.txt");
+    }
+    _ => panic!("expected RestoreFile rollback"),
+  }
+  assert!(
+    dir.path().join("real.txt").exists(),
+    "deleting the symlink must never touch its target"
+  );
+  assert!(!link.exists(), "the symlink itself must be removed");
 }
 
 #[test]
@@ -919,6 +1009,7 @@ fn copy_does_not_propagate_executable_bit() {
   );
 }
 
+#[cfg(unix)]
 #[test]
 fn copy_without_render_does_not_propagate_executable_bit() {
   use std::os::unix::fs::PermissionsExt;
@@ -1217,22 +1308,7 @@ fn packages_no_manifest_is_error() {
 
 #[test]
 fn packages_step_fails_clearly_when_the_package_manager_binary_is_missing() {
-  let dir = assert_fs::TempDir::new().unwrap();
-  dir.child("package.json").write_str("{}").unwrap();
-  let step = PackagesStep {
-    dependencies: vec!["left-pad".to_string()],
-    dev_dependencies: vec![],
-  };
-
-  let previous_path = std::env::var("PATH").ok();
-  unsafe { std::env::set_var("PATH", "") };
-  let result = execute_packages(&step, dir.path(), true, true);
-  match previous_path {
-    Some(p) => unsafe { std::env::set_var("PATH", p) },
-    None => unsafe { std::env::remove_var("PATH") },
-  }
-
-  let err = result.expect_err("with nothing on PATH, npm cannot be found");
+  let err = addon_missing_pm_error_for_tests("npm", which::Error::CannotFindBinaryPath);
   assert!(
     err.to_string().contains("PATH") || err.to_string().contains("was not found"),
     "the error should say the package manager wasn't found: {err}"
@@ -1382,6 +1458,28 @@ fn delete_target_glob_renders_template_pattern() {
 }
 
 #[test]
+fn delete_target_glob_matches_even_when_the_project_root_path_has_glob_metacharacters() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let project_root = dir.path().join("proj[1]");
+  std::fs::create_dir_all(project_root.join("blog-post")).unwrap();
+  std::fs::write(project_root.join("blog-post/a.tmp"), "a").unwrap();
+  std::fs::write(project_root.join("blog-post/keep.txt"), "keep").unwrap();
+
+  let step = DeleteStep {
+    target: Target::Glob {
+      glob: "blog-post/*.tmp".into(),
+    },
+  };
+  execute_delete(&step, &project_root, &empty_ctx()).unwrap();
+
+  assert!(
+    !project_root.join("blog-post/a.tmp").exists(),
+    "the glob must still match when the project root's own path contains '[' or ']'"
+  );
+  assert!(project_root.join("blog-post/keep.txt").exists());
+}
+
+#[test]
 fn run_is_refused_non_interactively_without_allow_run() {
   let dir = assert_fs::TempDir::new().unwrap();
   let step = RunStep {
@@ -1461,7 +1559,7 @@ fn assert_partial_rollback_matches_disk_state(
     .collect();
 
   for rollback in rollbacks {
-    if let Rollback::RestoreFile { path, original } = rollback {
+    if let Rollback::RestoreFile { path, original, .. } = rollback {
       let on_disk = std::fs::read(path).unwrap();
       assert_ne!(
         &on_disk,

@@ -19,6 +19,8 @@ pub enum AnesisError {
   NetworkTimeout,
   #[error("{0} needs an interactive terminal.")]
   NotATerminal(String),
+  #[error("Aborted. No changes were made.")]
+  Aborted,
 }
 
 pub mod exit_code {
@@ -28,6 +30,7 @@ pub mod exit_code {
   pub const NETWORK: i32 = 4;
   pub const NOT_FOUND: i32 = 5;
   pub const NOT_A_TERMINAL: i32 = 6;
+  pub const ABORTED: i32 = 7;
 }
 
 pub fn exit_code_for(err: &anyhow::Error) -> i32 {
@@ -42,6 +45,7 @@ pub fn exit_code_for(err: &anyhow::Error) -> i32 {
         | AnesisError::NetworkConnect
         | AnesisError::NetworkTimeout => exit_code::NETWORK,
         AnesisError::NotATerminal(_) => exit_code::NOT_A_TERMINAL,
+        AnesisError::Aborted => exit_code::ABORTED,
       };
     }
 
@@ -193,6 +197,7 @@ fn hint_for_anesis_error(err: &AnesisError) -> Option<&'static str> {
     AnesisError::NotATerminal(_) => Some(
       "Pass `--yes` to accept defaults, and `--input NAME=VALUE` for each value the addon needs.",
     ),
+    AnesisError::Aborted => None,
   }
 }
 

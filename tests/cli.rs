@@ -145,7 +145,8 @@ fn addon_help() {
     .stdout(contains("Manage addons"))
     .stdout(contains("install"))
     .stdout(contains("list"))
-    .stdout(contains("remove"));
+    .stdout(contains("remove"))
+    .stdout(contains("lint"));
 }
 
 #[test]

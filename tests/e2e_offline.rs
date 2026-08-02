@@ -262,3 +262,65 @@ fn a_failing_addon_command_is_fully_rolled_back_through_the_real_binary() {
     "a fully rolled-back command must not leave a lock entry"
   );
 }
+
+#[test]
+fn addon_lint_passes_on_a_clean_addon_through_the_real_binary() {
+  let cli = Cli::new();
+  let parent = TempDir::new().unwrap();
+  let named_dir = parent.child("lint-clean-addon");
+  named_dir.create_dir_all().unwrap();
+  named_dir
+    .child("anesis.addon.json")
+    .write_str(
+      r#"{
+  "schema_version": "1",
+  "id": "lint-clean-addon",
+  "name": "lint-clean-addon",
+  "version": "1.0.0",
+  "description": "e2e lint fixture",
+  "author": "anesis",
+  "requires": [],
+  "inputs": [],
+  "detect": [],
+  "variants": [{
+    "when": null,
+    "commands": [{
+      "name": "install",
+      "description": "",
+      "once": true,
+      "requires_commands": [],
+      "inputs": [],
+      "steps": [
+        { "type": "create", "path": "generated.txt", "content": "x\n", "if_exists": "overwrite" }
+      ]
+    }]
+  }]
+}"#,
+    )
+    .unwrap();
+
+  cli
+    .command()
+    .args(["addon", "lint", &named_dir.path().display().to_string()])
+    .assert()
+    .success()
+    .stdout(predicates::str::contains("No issues found"));
+}
+
+#[test]
+fn addon_lint_fails_through_the_real_binary_when_the_id_does_not_match_the_directory() {
+  let cli = Cli::new();
+  let addon_dir = cli.write_addon(
+    "lint-mismatched-addon",
+    r#"[
+      { "type": "create", "path": "generated.txt", "content": "x\n", "if_exists": "overwrite" }
+    ]"#,
+  );
+
+  cli
+    .command()
+    .args(["addon", "lint", &addon_dir.path().display().to_string()])
+    .assert()
+    .failure()
+    .stderr(predicates::str::contains("does not match its directory"));
+}

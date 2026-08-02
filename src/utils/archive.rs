@@ -1,6 +1,6 @@
 use std::{
   io::{Cursor, Read, Write},
-  path::{Component, Path},
+  path::{Component, Path, PathBuf},
 };
 
 use anyhow::{Result, anyhow};
@@ -118,22 +118,9 @@ pub(crate) fn extract_tar_gz(bytes: Vec<u8>, dest: &Path, subdir: Option<&str>) 
     let mut entry = entry?;
     let raw_path = entry.path()?.into_owned();
 
-    let mut components = raw_path.components();
-    components.next();
-    let stripped = components.as_path();
-
-    let rel = if let Some(dir) = subdir {
-      match stripped.strip_prefix(dir) {
-        Ok(r) => r.to_owned(),
-        Err(_) => continue,
-      }
-    } else {
-      stripped.to_owned()
-    };
-
-    if rel.as_os_str().is_empty() {
+    let Some(rel) = strip_archive_path(&raw_path, subdir) else {
       continue;
-    }
+    };
 
     if !is_safe_relative(&rel) {
       return Err(anyhow!(
@@ -191,16 +178,15 @@ pub async fn download_and_extract(
   extract_tar_gz(bytes, dest, subdir)
 }
 
-#[doc(hidden)]
-pub fn strip_archive_path_for_tests(
-  raw_path: &std::path::Path,
-  subdir: Option<&str>,
-) -> Option<std::path::PathBuf> {
+fn strip_archive_path(raw_path: &Path, subdir: Option<&str>) -> Option<PathBuf> {
   let mut components = raw_path.components();
+  while matches!(components.clone().next(), Some(Component::CurDir)) {
+    components.next();
+  }
   components.next();
   let stripped = components.as_path();
 
-  let rel: std::path::PathBuf = if let Some(dir) = subdir {
+  let rel: PathBuf = if let Some(dir) = subdir {
     match stripped.strip_prefix(dir) {
       Ok(r) => r.to_owned(),
       Err(_) => return None,
@@ -212,8 +198,14 @@ pub fn strip_archive_path_for_tests(
   if rel.as_os_str().is_empty() {
     return None;
   }
-  if !is_safe_relative(&rel) {
-    return None;
-  }
+
   Some(rel)
+}
+
+#[doc(hidden)]
+pub fn strip_archive_path_for_tests(
+  raw_path: &std::path::Path,
+  subdir: Option<&str>,
+) -> Option<std::path::PathBuf> {
+  strip_archive_path(raw_path, subdir)
 }

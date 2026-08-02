@@ -44,6 +44,11 @@ impl AnesisPaths {
     }
   }
 
+  pub fn addon_dir(&self, addon_id: &str) -> Result<PathBuf> {
+    crate::utils::validate::validate_registry_id("addon", addon_id)?;
+    Ok(self.addons.join(addon_id))
+  }
+
   pub fn ensure_directories(&self) -> Result<()> {
     fs::create_dir_all(&self.home)?;
     fs::create_dir_all(&self.cache)?;

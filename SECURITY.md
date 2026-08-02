@@ -101,6 +101,23 @@ and the backend redirects the browser to it with the JWT in the query string.
 That URL never leaves the loopback interface; it is a query parameter rather than
 a fragment because the local listener cannot read a fragment.
 
+## Verifying release artifacts
+
+Every release publishes `SHA256SUMS` alongside the archives, and both the
+archives and `SHA256SUMS` carry a
+[GitHub build provenance attestation](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
+proving they were built by this repository's release workflow from the tagged
+commit — not hand-uploaded.
+
+```bash
+curl -LO https://github.com/anesis-dev/anesis-cli/releases/download/v1.0.0/anesis-linux-x86_64.tar.gz
+curl -LO https://github.com/anesis-dev/anesis-cli/releases/download/v1.0.0/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+
+gh attestation verify anesis-linux-x86_64.tar.gz --repo anesis-dev/anesis-cli
+gh attestation verify SHA256SUMS --repo anesis-dev/anesis-cli
+```
+
 ## Out of scope
 
 - Vulnerabilities in the dependencies a template or addon installs — report those

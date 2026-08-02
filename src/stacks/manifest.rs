@@ -58,6 +58,7 @@ pub fn validate(stack: &StackManifest) -> Result<()> {
   if stack.template.trim().is_empty() {
     return Err(anyhow!("stack '{}' declares no template", stack.id));
   }
+  crate::utils::validate::validate_template_name(&stack.template)?;
   for (i, addon) in stack.addons.iter().enumerate() {
     if addon.id.trim().is_empty() {
       return Err(anyhow!(
@@ -66,6 +67,7 @@ pub fn validate(stack: &StackManifest) -> Result<()> {
         i + 1
       ));
     }
+    crate::utils::validate::validate_registry_id("addon", &addon.id)?;
   }
   Ok(())
 }

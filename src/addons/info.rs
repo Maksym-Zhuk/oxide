@@ -71,10 +71,16 @@ fn print_addon_info(m: &AddonManifest) {
         let total = cmd.steps.len();
         println!("    {}", "steps:".dimmed());
         for (idx, step) in cmd.steps.iter().enumerate() {
+          let when_suffix = step
+            .when
+            .as_deref()
+            .map(|w| format!(" {}", format!("(when: {w})").dimmed()))
+            .unwrap_or_default();
           println!(
-            "      {} {}",
+            "      {} {}{}",
             format!("[{}/{}]", idx + 1, total).dimmed(),
-            step_label(step)
+            step_label(&step.kind),
+            when_suffix
           );
         }
       }
@@ -137,5 +143,6 @@ fn step_label(step: &Step) -> String {
       s.dependencies.len() + s.dev_dependencies.len()
     ),
     Step::Run(s) => format!("run '{}'", s.command),
+    Step::JsonPatch(s) => format!("patch JSON in '{}'", s.path),
   }
 }

@@ -1,6 +1,5 @@
 ---
 source: tests/mcp.rs
-assertion_line: 83
 expression: "anesis::mcp::tools_list_for_tests()"
 ---
 [
@@ -58,6 +57,10 @@ expression: "anesis::mcp::tools_list_for_tests()"
         "name": {
           "description": "Project directory to create (use '.' for the current dir)",
           "type": "string"
+        },
+        "overwrite": {
+          "description": "Allow overwriting existing files in the destination directory. Defaults to false, which fails instead of silently clobbering files; ask the user before setting it.",
+          "type": "boolean"
         },
         "path": {
           "description": "Working directory to run in (defaults to the server's cwd)",
@@ -128,6 +131,10 @@ expression: "anesis::mcp::tools_list_for_tests()"
           "description": "Project directory to create",
           "type": "string"
         },
+        "overwrite": {
+          "description": "Allow overwriting existing files in the destination directory. Defaults to false, which fails instead of silently clobbering files; ask the user before setting it.",
+          "type": "boolean"
+        },
         "path": {
           "description": "Working directory to run in",
           "type": "string"
@@ -157,5 +164,67 @@ expression: "anesis::mcp::tools_list_for_tests()"
       "type": "object"
     },
     "name": "project_status"
+  },
+  {
+    "description": "Preview an addon command's plan (variant, inputs, steps) without changing any files. Use this before apply_addon to see what would happen.",
+    "inputSchema": {
+      "properties": {
+        "addon_id": {
+          "type": "string"
+        },
+        "command": {
+          "description": "Addon command to preview",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": true,
+          "description": "Addon input values by name",
+          "type": "object"
+        },
+        "path": {
+          "description": "Project directory to run in",
+          "type": "string"
+        }
+      },
+      "required": [
+        "addon_id",
+        "command"
+      ],
+      "type": "object"
+    },
+    "name": "dry_run"
+  },
+  {
+    "description": "Revert an applied addon's changes in the current project, using the recorded rollback journal.",
+    "inputSchema": {
+      "properties": {
+        "addon_id": {
+          "description": "Addon id to revert",
+          "type": "string"
+        },
+        "path": {
+          "description": "Project directory to run in",
+          "type": "string"
+        }
+      },
+      "required": [
+        "addon_id"
+      ],
+      "type": "object"
+    },
+    "name": "undo_addon"
+  },
+  {
+    "description": "List applied addons that have a newer version in the registry, as JSON.",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "description": "Project directory to inspect",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_outdated"
   }
 ]

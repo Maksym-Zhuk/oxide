@@ -37,17 +37,11 @@ pub fn execute_copy(
           return Ok(rollbacks);
         }
         let original = std::fs::read(&dest).map_err(StepFailure::without_rollbacks)?;
-        rollbacks.push(Rollback::RestoreFile {
-          path: dest.clone(),
-          original,
-        });
+        rollbacks.push(Rollback::restore_file(dest.clone(), original));
       }
       IfExists::Overwrite => {
         let original = std::fs::read(&dest).map_err(StepFailure::without_rollbacks)?;
-        rollbacks.push(Rollback::RestoreFile {
-          path: dest.clone(),
-          original,
-        });
+        rollbacks.push(Rollback::restore_file(dest.clone(), original));
       }
     }
   } else {

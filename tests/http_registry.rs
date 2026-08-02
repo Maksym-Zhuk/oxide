@@ -180,6 +180,58 @@ async fn install_template_a_valid_response_reaches_the_https_only_download_gate(
 }
 
 #[tokio::test]
+async fn install_template_update_leaves_the_old_cached_template_untouched_on_download_failure() {
+  let server = MockServer::start().await;
+  Mock::given(method("GET"))
+    .and(path("/template/react-vite-ts/url"))
+    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+      "archive_url": format!("http://{}/archive.tar.gz", server.address()),
+      "commit_sha": "new-sha",
+      "subdir": null
+    })))
+    .mount(&server)
+    .await;
+
+  let fx = Fixture::new();
+  let paths = fx.paths();
+  paths.ensure_directories().unwrap();
+  let template_dir = paths.templates.join("react-vite-ts");
+  std::fs::create_dir_all(&template_dir).unwrap();
+  std::fs::write(template_dir.join("marker.txt"), "old-content").unwrap();
+  std::fs::write(
+    template_dir.join("anesis.template.json"),
+    serde_json::to_string(&common::fixture::build::template_manifest(
+      "react-vite-ts",
+      "1.0.0",
+    ))
+    .unwrap(),
+  )
+  .unwrap();
+  anesis::templates::cache::update_templates_cache(
+    &paths.templates,
+    std::path::Path::new("react-vite-ts"),
+    "old-sha",
+  )
+  .unwrap();
+
+  let ctx = fx.mock_ctx(&server);
+  let err = install_template(&ctx, "react-vite-ts").await.unwrap_err();
+  assert!(
+    format!("{err:#}").contains("https"),
+    "expected the download stage's https gate to fail this update: {err:#}"
+  );
+
+  assert!(
+    template_dir.join("marker.txt").exists(),
+    "a failed update download must leave the previously-cached template on disk"
+  );
+  assert_eq!(
+    std::fs::read_to_string(template_dir.join("marker.txt")).unwrap(),
+    "old-content"
+  );
+}
+
+#[tokio::test]
 async fn install_template_skips_the_network_entirely_for_a_locally_linked_template() {
   let server = MockServer::start().await;
 

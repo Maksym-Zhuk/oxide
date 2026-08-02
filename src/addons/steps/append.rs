@@ -36,10 +36,7 @@ pub fn execute_append(step: &AppendStep, project_root: &Path, ctx: &tera::Contex
     }
     new_content.push_str(&rendered);
 
-    rollbacks.push(Rollback::RestoreFile {
-      path: path.clone(),
-      original,
-    });
+    rollbacks.push(Rollback::restore_file(path.clone(), original));
     if let Err(e) = std::fs::write(&path, new_content) {
       return Err(StepFailure::new(e, rollbacks));
     }

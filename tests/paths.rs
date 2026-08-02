@@ -119,6 +119,33 @@ fn ensure_directories_creates_addons_dir() {
 }
 
 #[test]
+fn addon_dir_joins_the_addons_directory() {
+  let paths = AnesisPaths::new().unwrap();
+  assert_eq!(
+    paths.addon_dir("drizzle").unwrap(),
+    paths.addons.join("drizzle")
+  );
+}
+
+#[test]
+fn addon_dir_rejects_a_traversing_id() {
+  let paths = AnesisPaths::new().unwrap();
+  assert!(paths.addon_dir("../../etc/passwd").is_err());
+}
+
+#[test]
+fn addon_dir_rejects_an_absolute_id() {
+  let paths = AnesisPaths::new().unwrap();
+  assert!(paths.addon_dir("/etc/passwd").is_err());
+}
+
+#[test]
+fn addon_dir_rejects_an_empty_id() {
+  let paths = AnesisPaths::new().unwrap();
+  assert!(paths.addon_dir("").is_err());
+}
+
+#[test]
 fn ensure_directories_is_idempotent() {
   let dir = assert_fs::TempDir::new().unwrap();
   let paths = AnesisPaths::under(dir.path());

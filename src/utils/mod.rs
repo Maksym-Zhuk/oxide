@@ -1,8 +1,13 @@
 pub mod archive;
+pub mod atomic;
 pub mod cleanup;
 pub mod errors;
 pub mod fs;
 pub mod http;
+pub mod pathsafe;
 pub mod picker;
+pub mod sanitize;
+pub mod suggest;
+pub mod tera_sandbox;
 pub mod ui;
 pub mod validate;

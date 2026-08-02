@@ -45,6 +45,7 @@ fn new_cmd() -> Commands {
     stack: None,
     installed: false,
     yes: false,
+    overwrite: false,
     input: vec![],
   }
 }

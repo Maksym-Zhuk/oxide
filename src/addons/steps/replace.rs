@@ -65,10 +65,7 @@ pub fn execute_replace(
     }
 
     let new_content = content.replace(&step.find, &rendered_replace);
-    rollbacks.push(Rollback::RestoreFile {
-      path: path.clone(),
-      original,
-    });
+    rollbacks.push(Rollback::restore_file(path.clone(), original));
     if let Err(e) = std::fs::write(&path, new_content) {
       return Err(StepFailure::new(e, rollbacks));
     }

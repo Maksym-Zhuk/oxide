@@ -8,22 +8,31 @@ use assert_fs::prelude::*;
 
 #[test]
 fn upsert_managed_block_inserts_into_empty() {
-  let result = upsert_managed_block("", "# start\ncode\n# end", "# start", "# end");
+  let result = upsert_managed_block("", "# start\ncode\n# end", "# start", "# end").unwrap();
   assert_eq!(result, "# start\ncode\n# end\n");
 }
 
 #[test]
 fn upsert_managed_block_replaces_existing() {
   let original = "before\n\n# start\nold code\n# end\nafter\n";
-  let result = upsert_managed_block(original, "# start\nnew code\n# end", "# start", "# end");
+  let result =
+    upsert_managed_block(original, "# start\nnew code\n# end", "# start", "# end").unwrap();
   assert_eq!(result, "before\n\n# start\nnew code\n# end\nafter\n");
 }
 
 #[test]
 fn upsert_managed_block_appends_when_absent() {
   let original = "existing content\n";
-  let result = upsert_managed_block(original, "# start\ncode\n# end", "# start", "# end");
+  let result = upsert_managed_block(original, "# start\ncode\n# end", "# start", "# end").unwrap();
   assert_eq!(result, "existing content\n\n# start\ncode\n# end\n");
+}
+
+#[test]
+fn upsert_managed_block_rejects_an_orphaned_start_marker_instead_of_corrupting_the_file() {
+  let original = "before\n\n# start\nsome content the user cares about\nafter\n";
+  let err = upsert_managed_block(original, "# start\nnew code\n# end", "# start", "# end")
+    .expect_err("an unpaired start marker must be refused, not silently appended to");
+  assert!(err.to_string().contains("without a matching"));
 }
 
 #[test]
@@ -150,7 +159,7 @@ fn command_for_paths_adds_a_use_subcommand_per_installed_addon_with_its_commands
 #[test]
 fn zsh_fpath_snippet_contains_dir_and_compinit() {
   let snippet = zsh_fpath_snippet(Path::new("/home/user/.zfunc"));
-  assert!(snippet.contains("fpath=(/home/user/.zfunc $fpath)"));
+  assert!(snippet.contains("fpath=('/home/user/.zfunc' $fpath)"));
   assert!(snippet.contains("autoload -Uz compinit && compinit"));
   assert!(snippet.starts_with("# anesis completions start"));
   assert!(snippet.ends_with("# anesis completions end"));
@@ -162,7 +171,7 @@ fn upsert_zsh_config_writes_new_file() {
   let config = dir.path().join(".zshrc");
   upsert_zsh_config(&config, Path::new("/home/user/.zfunc")).unwrap();
   let content = fs::read_to_string(&config).unwrap();
-  assert!(content.contains("fpath=(/home/user/.zfunc $fpath)"));
+  assert!(content.contains("fpath=('/home/user/.zfunc' $fpath)"));
 }
 
 #[test]
@@ -201,13 +210,50 @@ fn upsert_zsh_config_preserves_existing_content() {
   upsert_zsh_config(&config, Path::new("/home/user/.zfunc")).unwrap();
   let content = fs::read_to_string(&config).unwrap();
   assert!(content.contains("export PATH=$PATH:/usr/local/bin"));
-  assert!(content.contains("fpath=(/home/user/.zfunc $fpath)"));
+  assert!(content.contains("fpath=('/home/user/.zfunc' $fpath)"));
+}
+
+#[test]
+fn upsert_zsh_config_backs_up_the_previous_content_before_modifying() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let config = dir.path().join(".zshrc");
+  fs::write(&config, "export PATH=$PATH:/usr/local/bin\n").unwrap();
+
+  upsert_zsh_config(&config, Path::new("/home/user/.zfunc")).unwrap();
+
+  let backup = dir.path().join(".zshrc.bak");
+  assert!(backup.exists(), ".zshrc.bak must be created");
+  assert_eq!(
+    fs::read_to_string(&backup).unwrap(),
+    "export PATH=$PATH:/usr/local/bin\n"
+  );
+}
+
+#[test]
+fn upsert_zsh_config_refuses_to_touch_a_file_with_an_orphaned_start_marker() {
+  let dir = assert_fs::TempDir::new().unwrap();
+  let config = dir.path().join(".zshrc");
+  fs::write(
+    &config,
+    "# anesis completions start\nfpath=(/old/.zfunc $fpath)\nexport EDITOR=vim\n",
+  )
+  .unwrap();
+
+  let err = upsert_zsh_config(&config, Path::new("/new/.zfunc")).unwrap_err();
+  assert!(err.to_string().contains("Refusing to edit"));
+
+  let content = fs::read_to_string(&config).unwrap();
+  assert!(
+    content.contains("export EDITOR=vim"),
+    "the file must be left completely untouched: {content}"
+  );
+  assert!(!dir.path().join(".zshrc.bak").exists());
 }
 
 #[test]
 fn upsert_managed_block_normalises_crlf_line_endings() {
   let original = "line1\r\n\r\n# start\r\nold\r\n# end\r\nline2\r\n";
-  let result = upsert_managed_block(original, "# start\nnew\n# end", "# start", "# end");
+  let result = upsert_managed_block(original, "# start\nnew\n# end", "# start", "# end").unwrap();
   assert!(!result.contains('\r'), "CRLF should be normalised to LF");
   assert!(result.contains("new"));
   assert!(!result.contains("old"));
@@ -215,14 +261,14 @@ fn upsert_managed_block_normalises_crlf_line_endings() {
 
 #[test]
 fn upsert_managed_block_no_trailing_newline_in_content() {
-  let result = upsert_managed_block("", "# start\ncode\n# end", "# start", "# end");
+  let result = upsert_managed_block("", "# start\ncode\n# end", "# start", "# end").unwrap();
   assert!(result.ends_with('\n'), "result should end with newline");
 }
 
 #[test]
 fn upsert_managed_block_appends_after_content_without_trailing_newline() {
   let original = "content without newline";
-  let result = upsert_managed_block(original, "# start\nblock\n# end", "# start", "# end");
+  let result = upsert_managed_block(original, "# start\nblock\n# end", "# start", "# end").unwrap();
   assert!(result.contains("content without newline"));
   assert!(result.contains("block"));
 }

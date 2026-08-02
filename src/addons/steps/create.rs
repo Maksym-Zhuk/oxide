@@ -29,7 +29,7 @@ pub fn execute_create(
           println!("  {rendered_path} already exists — keeping it (pass no --yes to be asked)");
           return Ok(rollbacks);
         }
-        let overwrite = Confirm::new(&format!("{} already exists. Overwrite?", step.path))
+        let overwrite = Confirm::new(&format!("{rendered_path} already exists. Overwrite?"))
           .with_default(false)
           .prompt()
           .map_err(StepFailure::without_rollbacks)?;
@@ -37,17 +37,11 @@ pub fn execute_create(
           return Ok(rollbacks);
         }
         let original = std::fs::read(&path).map_err(StepFailure::without_rollbacks)?;
-        rollbacks.push(Rollback::RestoreFile {
-          path: path.clone(),
-          original,
-        });
+        rollbacks.push(Rollback::restore_file(path.clone(), original));
       }
       IfExists::Overwrite => {
         let original = std::fs::read(&path).map_err(StepFailure::without_rollbacks)?;
-        rollbacks.push(Rollback::RestoreFile {
-          path: path.clone(),
-          original,
-        });
+        rollbacks.push(Rollback::restore_file(path.clone(), original));
       }
     }
   } else {

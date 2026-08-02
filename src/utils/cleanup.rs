@@ -34,6 +34,16 @@ pub fn run_cleanup(task: &CleanupTask) {
       if !path.exists() {
         return;
       }
+      let canonical_path = fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+      let canonical_root = fs::canonicalize(prune_root).unwrap_or_else(|_| prune_root.clone());
+      if !canonical_path.starts_with(&canonical_root) {
+        eprintln!(
+          "Refusing to remove {}: it is outside {}",
+          path.display(),
+          prune_root.display()
+        );
+        return;
+      }
       if let Err(e) = fs::remove_dir_all(path) {
         eprintln!("Failed to remove {}: {e}", path.display());
         return;

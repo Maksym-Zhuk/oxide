@@ -102,13 +102,11 @@ pub fn execute_inject(
     }
 
     let had_trailing_newline = original.last().copied() == Some(b'\n');
-    rollbacks.push(Rollback::RestoreFile {
-      path: path.clone(),
-      original,
-    });
-    let mut new_content = file_lines.join("\n");
+    let line_ending = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    rollbacks.push(Rollback::restore_file(path.clone(), original));
+    let mut new_content = file_lines.join(line_ending);
     if had_trailing_newline {
-      new_content.push('\n');
+      new_content.push_str(line_ending);
     }
     if let Err(e) = std::fs::write(&path, new_content) {
       return Err(StepFailure::new(e, rollbacks));
