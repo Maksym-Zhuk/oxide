@@ -33,6 +33,16 @@ export ANESIS_FRONTEND_URL=http://localhost:3000
 `ANESIS_DEBUG=1` swaps the friendly error messages for full error chains and
 panic backtraces.
 
+Enable the repository's git hooks once per clone — `core.hooksPath` is local
+config, so it does not come with the checkout:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-push` then runs fmt, clippy and the test suite before every
+push. `git push --no-verify` or `ANESIS_SKIP_HOOKS=1` bypasses it.
+
 ## Before opening a PR
 
 All four must pass. CI runs the same commands on Linux, macOS and Windows,
