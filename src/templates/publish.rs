@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
   auth::token::get_auth_user,
   context::AppContext,
-  utils::{errors::check_response, ui::spinner},
+  utils::{
+    errors::check_response,
+    ui::{self, spinner},
+  },
 };
 
 #[derive(Deserialize, Serialize)]
@@ -57,7 +60,7 @@ pub async fn publish(
     .inspect_err(|_| sp.finish_and_clear())?;
   sp.finish_and_clear();
 
-  println!("✅ {}", res.message);
+  ui::success(&res.message);
   println!("   Template: {}", res.name);
   Ok(())
 }

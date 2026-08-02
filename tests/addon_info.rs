@@ -1,8 +1,9 @@
-use anesis::addons::info::{input_line_for_tests, step_label_for_tests};
+use anesis::addons::info::input_line_for_tests;
 use anesis::addons::manifest::{
   AppendStep, CopyStep, CreateStep, DeleteStep, IfExists, IfNotFound, InjectStep, InputDef,
   InputType, MoveStep, PackagesStep, RenameStep, ReplaceStep, RunStep, Step, Target,
 };
+use anesis::addons::runner::step_label_for_tests;
 
 fn input(
   input_type: InputType,

@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 
+use crate::utils::ui;
 use anyhow::{Result, anyhow};
 
 fn token_override() -> Option<String> {
@@ -28,9 +29,9 @@ pub fn logout(auth_path: &Path) -> Result<()> {
   }
 
   if has_token_override {
-    println!(
-      "⚠ ANESIS_TOKEN is set in your environment and takes priority over the saved session — \
-       the CLI is still authenticated as long as it's set. Unset it to fully log out."
+    ui::warn(
+      "ANESIS_TOKEN is set in your environment and takes priority over the saved session — \
+       the CLI is still authenticated as long as it's set. Unset it to fully log out.",
     );
   }
 

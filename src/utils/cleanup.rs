@@ -4,10 +4,12 @@ use anyhow::Result;
 
 use crate::addons::runner::apply_rollback;
 use crate::context::{CleanupState, CleanupTask};
+use crate::utils::ui;
 
 pub fn setup_ctrlc_handler(cleanup_state: CleanupState) -> Result<()> {
   ctrlc::set_handler(move || {
-    println!("\n⚠ Interrupted! Cleaning up...");
+    println!();
+    ui::warn("Interrupted! Cleaning up...");
 
     let task = {
       let mut guard = cleanup_state.lock().unwrap_or_else(|e| e.into_inner());
@@ -49,7 +51,7 @@ pub fn run_cleanup(task: &CleanupTask) {
         return;
       }
       prune_empty_parents(path, prune_root);
-      println!("✓ Removed incomplete {label}");
+      ui::success(format!("Removed incomplete {label}"));
     }
 
     CleanupTask::PartialProject { path } => {
@@ -60,7 +62,7 @@ pub fn run_cleanup(task: &CleanupTask) {
         eprintln!("Failed to remove {}: {e}", path.display());
         return;
       }
-      println!("✓ Removed incomplete project {}", path.display());
+      ui::success(format!("Removed incomplete project {}", path.display()));
     }
 
     CleanupTask::PartialProjectFiles { paths } => {
@@ -69,7 +71,9 @@ pub fn run_cleanup(task: &CleanupTask) {
         .filter(|p| p.exists() && fs::remove_file(p).is_ok())
         .count();
       if removed > 0 {
-        println!("✓ Removed {removed} newly-created file(s) from the interrupted generation");
+        ui::success(format!(
+          "Removed {removed} newly-created file(s) from the interrupted generation"
+        ));
       }
     }
 
@@ -91,7 +95,9 @@ pub fn run_cleanup(task: &CleanupTask) {
       for rollback in steps.into_iter().rev() {
         let _ = apply_rollback(rollback, project_root);
       }
-      println!("✓ Rolled back {count} step(s) from addon '{addon_id}'");
+      ui::success(format!(
+        "Rolled back {count} step(s) from addon '{addon_id}'"
+      ));
     }
   }
 }

@@ -47,6 +47,7 @@ fn new_cmd() -> Commands {
     yes: false,
     overwrite: false,
     input: vec![],
+    dry_run: false,
   }
 }
 

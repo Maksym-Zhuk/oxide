@@ -4,7 +4,10 @@ use serde::Serialize;
 use crate::{
   auth::token::get_auth_user,
   context::AppContext,
-  utils::{errors::check_response, ui::spinner},
+  utils::{
+    errors::check_response,
+    ui::{self, spinner},
+  },
 };
 
 #[derive(Serialize)]
@@ -64,7 +67,7 @@ pub async fn publish_stack(
     .get("message")
     .and_then(|m| m.as_str())
     .unwrap_or("Done");
-  println!("✅ {message}");
+  ui::success(message);
   if let Some(id) = body.get("stack_id").and_then(|m| m.as_str()) {
     println!("   Stack: {id}");
   }

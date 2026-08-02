@@ -1,4 +1,7 @@
 use super::steps::Rollback;
+use crate::utils::ui::symbols;
+
+const RENDER_BLOCK_LIMIT: usize = 20;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ChangeSummary {
@@ -60,5 +63,40 @@ impl ChangeSummary {
       ));
     }
     parts.join(", ")
+  }
+
+  pub fn render_block(&self, rollbacks: &[Rollback]) -> String {
+    if self.is_empty() {
+      return "No changes.".to_string();
+    }
+
+    let files = self.files_changed();
+    let mut lines = vec![format!(
+      "{} {files} file{} changed",
+      symbols::ok(),
+      if files == 1 { "" } else { "s" }
+    )];
+
+    let mut shown = 0usize;
+    for rollback in rollbacks {
+      if shown >= RENDER_BLOCK_LIMIT {
+        break;
+      }
+      let (marker, path) = match rollback {
+        Rollback::DeleteCreatedFile { path } => ("+", path.display().to_string()),
+        Rollback::RestoreFile { path, .. } => ("~", path.display().to_string()),
+        Rollback::RenameFile { to, .. } => (symbols::arrow(), to.display().to_string()),
+        Rollback::IrreversibleRun { .. } => continue,
+      };
+      lines.push(format!("  {marker} {path}"));
+      shown += 1;
+    }
+
+    let remaining = files.saturating_sub(shown);
+    if remaining > 0 {
+      lines.push(format!("  {}and {remaining} more", symbols::ellipsis()));
+    }
+
+    lines.join("\n")
   }
 }

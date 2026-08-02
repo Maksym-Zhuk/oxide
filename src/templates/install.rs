@@ -8,7 +8,11 @@ use serde::Deserialize;
 use crate::{
   auth::token::get_auth_user,
   context::{AppContext, CleanupTask},
-  utils::{archive::download_and_extract, errors::classify_reqwest_error, ui::spinner},
+  utils::{
+    archive::download_and_extract,
+    errors::classify_reqwest_error,
+    ui::{self, spinner},
+  },
 };
 
 use super::cache::{CachedTemplate, get_cached_template, update_templates_cache};
@@ -199,7 +203,9 @@ pub async fn install_template(ctx: &AppContext, template_name: &str) -> Result<I
   } else {
     "Downloading"
   };
-  let sp = spinner(format!("{action} template '{template_name}'..."));
+  if !ui::is_quiet() {
+    println!("{action} template '{template_name}'...");
+  }
   debug!("Start download files");
   let download_result = download_and_extract(
     &ctx.client,
@@ -210,7 +216,6 @@ pub async fn install_template(ctx: &AppContext, template_name: &str) -> Result<I
   )
   .await;
   debug!("End download files");
-  sp.finish_and_clear();
 
   {
     let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());

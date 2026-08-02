@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod catalog;
 pub mod detect;
+pub mod diff;
 pub mod info;
 pub mod install;
 pub mod link;

@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use colored::Colorize;
 use inquire::{Confirm, Select, Text};
 
 use crate::{
@@ -15,7 +14,7 @@ use crate::{
   templates::generator::{to_camel_case, to_kebab_case, to_pascal_case, to_snake_case},
   utils::{
     picker::{ItemKind, PickItem, pick_one},
-    ui::spinner,
+    ui::{self, spinner},
   },
 };
 
@@ -234,9 +233,10 @@ pub async fn run_addon_command(
   }
   let _cleanup_guard = ClearCleanupOnDrop(&ctx.cleanup_state);
 
+  let step_progress = ui::StepProgress::new();
   for (idx, step) in steps.iter().enumerate() {
     let label = step_label(step);
-    println!("{} {}", format!("[{}/{}]", idx + 1, total).dimmed(), label);
+    let handle = step_progress.start_step(idx, total, &label);
 
     let result = match step {
       Step::Copy(s) => execute_copy(s, &addon_dir, project_root, &tera_ctx, non_interactive),
@@ -253,11 +253,15 @@ pub async fn run_addon_command(
     };
 
     match result {
-      Ok(rollbacks) => journal
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .extend(rollbacks),
+      Ok(rollbacks) => {
+        handle.success();
+        journal
+          .lock()
+          .unwrap_or_else(|e| e.into_inner())
+          .extend(rollbacks);
+      }
       Err(failure) => {
+        handle.failure();
         journal
           .lock()
           .unwrap_or_else(|e| e.into_inner())
@@ -266,7 +270,7 @@ pub async fn run_addon_command(
         let err = failure
           .error
           .context(format!("step {} ({}) failed", idx + 1, label));
-        eprintln!("{} {:#}", "✗".red().bold(), err);
+        ui::failure(format!("{err:#}"));
         let choice = if non_interactive {
           "Rollback all changes"
         } else {
@@ -313,10 +317,9 @@ pub async fn run_addon_command(
   }
 
   if let Err(err) = lock.save(project_root) {
-    eprintln!(
-      "{} Failed to save the rollback journal ({err:#}); rolling back this command's changes.",
-      "✗".red().bold()
-    );
+    ui::failure(format!(
+      "Failed to save the rollback journal ({err:#}); rolling back this command's changes."
+    ));
     for rollback in take_journal(&journal).into_iter().rev() {
       let _ = apply_rollback(rollback, project_root);
     }
@@ -335,10 +338,10 @@ pub async fn run_addon_command(
   if let Err(err) = AnesisManifest::add_addon(addon_id, project_root) {
     eprintln!("Note: could not update anesis.json ({err}).");
   }
-  println!("✓ Command '{}' completed successfully.", command_name);
+  ui::success(format!("Command '{command_name}' completed successfully."));
   let summary = super::summary::ChangeSummary::from_rollbacks(&completed_rollbacks);
   if !summary.is_empty() {
-    println!("{}", summary.render());
+    println!("{}", summary.render_block(&completed_rollbacks));
   }
 
   if let Some(handle) = update_check
@@ -435,7 +438,7 @@ pub async fn list_addon_commands(
   }
 }
 
-fn step_label(step: &Step) -> String {
+pub(crate) fn step_label(step: &Step) -> String {
   use crate::addons::manifest::Target;
   use crate::utils::sanitize::sanitize_for_display;
   fn target(t: &Target) -> &str {
@@ -516,36 +519,28 @@ fn print_dry_run_plan(
 ) {
   let plan = plan_command(addon_id, command_name, variant, steps);
 
-  println!(
-    "{} {} {}",
-    "Dry run:".bold(),
-    plan.addon_id.cyan(),
-    plan.command_name.cyan()
-  );
-  println!(
-    "  {} {}",
-    "variant:".dimmed(),
-    plan.variant.as_deref().unwrap_or("universal")
-  );
+  ui::section(format!(
+    "Dry run: {} {}",
+    ui::accent(&plan.addon_id),
+    ui::accent(&plan.command_name)
+  ));
+  ui::kv("  variant", plan.variant.as_deref().unwrap_or("universal"));
 
   let mut inputs: Vec<(&String, &String)> = addon_inputs.iter().chain(cmd_inputs.iter()).collect();
   inputs.sort_by(|a, b| a.0.cmp(b.0));
   if inputs.is_empty() {
-    println!("  {} (none)", "inputs:".dimmed());
+    ui::kv("  inputs", "(none)");
   } else {
-    println!("  {}", "inputs:".dimmed());
+    println!("  inputs:");
     for (k, v) in inputs {
       println!("    {k} = {v}");
     }
   }
 
-  println!("  {} {} step(s)", "steps:".dimmed(), plan.steps.len());
+  ui::kv("  steps", format!("{} step(s)", plan.steps.len()));
   for (idx, step) in plan.steps.iter().enumerate() {
-    println!(
-      "    {} {}",
-      format!("[{}/{}]", idx + 1, plan.steps.len()).dimmed(),
-      step.label
-    );
+    print!("    ");
+    ui::step(idx, plan.steps.len(), &step.label);
   }
   println!("\nNo files were changed.");
 }
@@ -573,10 +568,10 @@ fn confirm_addon_execution(
     }
   }
 
-  println!(
-    "⚠ Addon '{addon_id}' command '{command_name}' will modify files in this project \
+  ui::warn(format!(
+    "Addon '{addon_id}' command '{command_name}' will modify files in this project \
      ({writes} created/copied, {edits} edited, {removes} deleted/moved)."
-  );
+  ));
   println!(
     "  Addons run unsandboxed and can overwrite source files or 'package.json'. \
      Only run addons you trust."
@@ -730,10 +725,9 @@ pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) ->
   let conflicts = undo_conflicts(&tagged);
 
   if !conflicts.is_empty() {
-    eprintln!(
-      "{} some files changed since '{addon_id}' was applied:",
-      "⚠".yellow().bold()
-    );
+    ui::warn_err(format!(
+      "some files changed since '{addon_id}' was applied:"
+    ));
     for c in &conflicts {
       eprintln!("  {c}");
     }
@@ -771,10 +765,7 @@ pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) ->
     }
     lock.save(project_root)?;
 
-    eprintln!(
-      "{} could not undo every change made by '{addon_id}':",
-      "⚠".yellow().bold()
-    );
+    ui::warn_err(format!("could not undo every change made by '{addon_id}':"));
     for f in &failures {
       eprintln!("  {f}");
     }
@@ -791,10 +782,10 @@ pub fn undo_addon(addon_id: &str, project_root: &Path, non_interactive: bool) ->
     eprintln!("Note: could not update anesis.json ({err}).");
   }
 
-  println!("✓ Reverted addon '{addon_id}'.");
+  ui::success(format!("Reverted addon '{addon_id}'."));
   let summary = super::summary::ChangeSummary::from_rollbacks(&applied);
   if !summary.is_empty() {
-    println!("{}", summary.render());
+    println!("{}", summary.render_block(&applied));
   }
   Ok(())
 }
@@ -827,17 +818,8 @@ pub struct OutdatedEntry {
   pub error: Option<String>,
 }
 
-pub async fn outdated(ctx: &AppContext, project_root: &Path, json: bool) -> Result<()> {
+pub async fn collect_outdated(ctx: &AppContext, project_root: &Path) -> Result<Vec<OutdatedEntry>> {
   let lock = LockFile::load(project_root)?;
-
-  if lock.addons.is_empty() {
-    if json {
-      println!("[]");
-    } else {
-      println!("No addons applied in this project.");
-    }
-    return Ok(());
-  }
 
   let mut entries = Vec::with_capacity(lock.addons.len());
   for entry in &lock.addons {
@@ -858,6 +840,22 @@ pub async fn outdated(ctx: &AppContext, project_root: &Path, json: bool) -> Resu
       },
     });
   }
+  Ok(entries)
+}
+
+pub async fn outdated(ctx: &AppContext, project_root: &Path, json: bool) -> Result<()> {
+  let lock = LockFile::load(project_root)?;
+
+  if lock.addons.is_empty() {
+    if json {
+      println!("[]");
+    } else {
+      println!("No addons applied in this project.");
+    }
+    return Ok(());
+  }
+
+  let entries = collect_outdated(ctx, project_root).await?;
 
   if json {
     println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -870,13 +868,14 @@ pub async fn outdated(ctx: &AppContext, project_root: &Path, json: bool) -> Resu
       (Some(latest), _) if entry.outdated => {
         any = true;
         println!(
-          "  {} v{} → v{}",
-          entry.id.cyan(),
+          "  {} v{} {} v{}",
+          ui::accent(&entry.id),
           entry.current,
-          latest.green()
+          ui::symbols::arrow(),
+          ui::good(latest)
         );
       }
-      (_, Some(err)) => eprintln!("  {} (could not check: {err})", entry.id.dimmed()),
+      (_, Some(err)) => eprintln!("  {} (could not check: {err})", ui::muted(&entry.id)),
       _ => {}
     }
   }
@@ -973,7 +972,7 @@ pub async fn update_addon(
     })?;
   }
 
-  println!("✓ Updated '{addon_id}' to v{latest}.");
+  ui::success(format!("Updated '{addon_id}' to v{latest}."));
   Ok(())
 }
 
@@ -1122,11 +1121,9 @@ pub fn apply_rollback(rollback: Rollback, project_root: &Path) -> Result<()> {
       prune_empty_dirs(from.parent(), project_root);
     }
     Rollback::IrreversibleRun { command } => {
-      eprintln!(
-        "{} could not undo shell command '{}' — its effects remain.",
-        "⚠".yellow().bold(),
-        command
-      );
+      ui::warn_err(format!(
+        "could not undo shell command '{command}' — its effects remain."
+      ));
     }
   }
   Ok(())

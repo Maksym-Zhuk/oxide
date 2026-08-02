@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::manifest::AddonManifest;
 use crate::utils::{
   picker::{ItemKind, PickItem},
-  ui::catalog_table,
+  ui::{self, catalog_table},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -121,7 +121,7 @@ pub fn remove_addon_from_cache(addons_dir: &Path, addon_id: &str) -> Result<()> 
   cache.addons.retain(|a| a.id != addon_id);
 
   write_cache(addons_dir, &cache)?;
-  println!("✓ Removed addon '{}'", addon_id);
+  ui::success(format!("Removed addon '{addon_id}'"));
   Ok(())
 }
 

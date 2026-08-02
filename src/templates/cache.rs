@@ -10,7 +10,7 @@ use crate::{
   templates::AnesisTemplate,
   utils::{
     picker::{ItemKind, PickItem},
-    ui::catalog_table,
+    ui::{self, catalog_table},
   },
 };
 
@@ -187,7 +187,7 @@ pub fn remove_template_from_cache(template_path: &Path, template_name: &str) -> 
     serde_json::to_string_pretty(&templates_info)?,
   )?;
 
-  println!("✓ Removed template '{}'", template_name);
+  ui::success(format!("Removed template '{template_name}'"));
   Ok(())
 }
 

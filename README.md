@@ -26,13 +26,15 @@ anesis status                       # show the project's template + applied addo
 ## Commands
 
 ```text
-anesis new <NAME> [TEMPLATE]        create a project (--stack to scaffold template + addons)
+anesis new <NAME> [TEMPLATE]        create a project (--stack to scaffold template + addons; --dry-run to preview)
 anesis template <install|link|list|info|remove|publish|republish>
 anesis addon <install|link|list|info|test|remove|publish|republish>
 anesis stack <install|link|list|info|remove|publish|republish>
-anesis use [ADDON] [COMMAND]        run an addon command in the current project
+anesis use [ADDON] [COMMAND]        run an addon command in the current project (--dry-run to preview, --diff to try it on a scratch copy)
 anesis undo <ADDON>                 revert an applied addon's changes
-anesis outdated / anesis update <ADDON>
+anesis outdated / anesis update <ADDON>|--all
+anesis why [PATH]                   show which addon command created/modified a file (omit PATH to list all)
+anesis doctor                       diagnose common environment/project problems
 anesis search [QUERY]               search templates/addons/stacks
 anesis login / logout / account
 anesis mcp                          run an MCP stdio server for AI agents
@@ -65,6 +67,7 @@ Available on every subcommand:
 | `-v`, `--verbose` | debug logging for anesis itself (`-vv` for trace). Goes to stderr, so `--json` stdout stays clean. |
 | `-q`, `--quiet` | no progress spinners, no upgrade notice. Results, errors and exit codes are unchanged. |
 | `--no-color` | plain output. Also implied when stdout is not a terminal, or when `NO_COLOR` is set. |
+| `--ascii` | ASCII glyphs (`[ok]`, `->`, `*`) instead of Unicode (`✓`, `→`, `•`). Also implied by `ANESIS_ASCII`, non-UTF-8 locales, and plain `cmd.exe`. |
 | `--no-telemetry` | see [Telemetry](#telemetry). |
 | `--allow-run` | see [Running remote code](#running-remote-code). |
 
@@ -109,6 +112,7 @@ version-check cache. Inside a scaffolded project, applied addons are tracked in
 | `ANESIS_RELEASES_DOWNLOAD_BASE_URL` | GitHub releases downloads | Override for `anesis upgrade`; mainly for testing. |
 | `RUST_LOG` | unset | Standard `env_logger` filter, e.g. `RUST_LOG=debug`. Overrides `-v`. |
 | `NO_COLOR` | unset | Standard [no-color](https://no-color.org/) opt-out; same effect as `--no-color`. |
+| `ANESIS_ASCII` | unset | Same effect as `--ascii`. |
 
 ## Telemetry
 

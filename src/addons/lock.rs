@@ -238,7 +238,7 @@ enum WireRollback {
   },
 }
 
-fn lexically_normalize(p: &Path) -> PathBuf {
+pub(crate) fn lexically_normalize(p: &Path) -> PathBuf {
   let mut out = PathBuf::new();
   for component in p.components() {
     match component {

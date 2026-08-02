@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
   auth::token::get_auth_user,
   context::AppContext,
-  utils::{errors::check_response, ui::spinner},
+  utils::{
+    errors::check_response,
+    ui::{self, spinner},
+  },
 };
 
 #[derive(Serialize)]
@@ -56,6 +59,6 @@ pub async fn republish_addon(
     .inspect_err(|_| sp.finish_and_clear())?;
   sp.finish_and_clear();
 
-  println!("✅ {}", res.message);
+  ui::success(&res.message);
   Ok(())
 }

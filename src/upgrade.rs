@@ -12,7 +12,10 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::{context::AppContext, utils::ui::spinner};
+use crate::{
+  context::AppContext,
+  utils::ui::{self, spinner},
+};
 
 const RELEASES_API_URL: &str = "https://api.github.com/repos/anesis-dev/anesis-cli/releases/latest";
 const RELEASES_DOWNLOAD_BASE_URL: &str =
@@ -121,13 +124,14 @@ pub async fn upgrade_cli(ctx: &AppContext) -> Result<()> {
 }
 
 fn upgrade_success_message(latest_version: &str, deferred_swap: bool) -> String {
+  let ok = ui::symbols::ok();
   if deferred_swap {
     format!(
-      "✓ Anesis v{latest_version} downloaded and verified; finishing the install in the \
+      "{ok} Anesis v{latest_version} downloaded and verified; finishing the install in the \
        background. Restart your shell in a few seconds."
     )
   } else {
-    format!("✓ Anesis updated to v{latest_version}. Restart your shell if needed.")
+    format!("{ok} Anesis updated to v{latest_version}. Restart your shell if needed.")
   }
 }
 
@@ -226,7 +230,7 @@ pub fn parse_version_prerelease_for_tests(version: &str) -> Result<String> {
   Ok(parse_version(version)?.pre.to_string())
 }
 
-fn is_newer_version(current: &str, latest: &str) -> Result<bool> {
+pub(crate) fn is_newer_version(current: &str, latest: &str) -> Result<bool> {
   Ok(parse_version(latest)? > parse_version(current)?)
 }
 

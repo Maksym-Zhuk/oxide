@@ -8,7 +8,7 @@ use crate::{
     server::{bind_local_auth_server, serve_local_auth_server},
     token::get_auth_user,
   },
-  utils::ui::spinner,
+  utils::ui::{self, spinner},
 };
 
 pub async fn login(auth_path: &Path, backend_url: &str, frontend_url: &str) -> Result<()> {
@@ -52,15 +52,15 @@ pub async fn login(auth_path: &Path, backend_url: &str, frontend_url: &str) -> R
   let auth_json = serde_json::to_string(&user)?;
   write_auth_file(auth_path, &auth_json)?;
 
-  println!("✅ Authorization successful as @{}", user.name);
+  ui::success(format!("Authorization successful as @{}", user.name));
 
   if std::env::var("ANESIS_TOKEN")
     .ok()
     .is_some_and(|t| !t.trim().is_empty())
   {
-    println!(
-      "⚠ ANESIS_TOKEN is set in your environment and takes priority over this saved session — \
-       the CLI will keep using it until you unset it."
+    ui::warn(
+      "ANESIS_TOKEN is set in your environment and takes priority over this saved session — \
+       the CLI will keep using it until you unset it.",
     );
   }
 

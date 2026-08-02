@@ -6,10 +6,11 @@ use std::{
 use anyhow::{Result, anyhow};
 use flate2::read::GzDecoder;
 use futures::StreamExt;
+use indicatif::ProgressBar;
 use reqwest::Client;
 use tar::Archive;
 
-use crate::utils::validate::require_https_url;
+use crate::utils::{ui, validate::require_https_url};
 
 fn is_safe_relative(rel: &Path) -> bool {
   rel
@@ -28,6 +29,7 @@ pub(crate) async fn download_capped(
   client: &Client,
   url: &str,
   token: Option<&str>,
+  progress: Option<&ProgressBar>,
 ) -> Result<Vec<u8>> {
   let mut request = client.get(url).header("User-Agent", "anesis");
   if let Some(token) = token {
@@ -36,12 +38,16 @@ pub(crate) async fn download_capped(
 
   let response = request.send().await?.error_for_status()?;
 
-  if let Some(len) = response.content_length()
-    && len > MAX_RESPONSE_BYTES
-  {
-    return Err(anyhow!(
-      "archive download exceeds the {MAX_RESPONSE_BYTES} byte limit (Content-Length: {len})"
-    ));
+  if let Some(len) = response.content_length() {
+    if len > MAX_RESPONSE_BYTES {
+      return Err(anyhow!(
+        "archive download exceeds the {MAX_RESPONSE_BYTES} byte limit (Content-Length: {len})"
+      ));
+    }
+    if let Some(pb) = progress {
+      pb.set_length(len);
+      ui::progress::apply_download_style(pb);
+    }
   }
 
   let mut buf = Vec::new();
@@ -54,6 +60,9 @@ pub(crate) async fn download_capped(
       ));
     }
     buf.extend_from_slice(&chunk);
+    if let Some(pb) = progress {
+      pb.inc(chunk.len() as u64);
+    }
   }
 
   Ok(buf)
@@ -65,7 +74,17 @@ pub async fn download_capped_for_tests(
   url: &str,
   token: Option<&str>,
 ) -> Result<Vec<u8>> {
-  download_capped(client, url, token).await
+  download_capped(client, url, token, None).await
+}
+
+#[doc(hidden)]
+pub async fn download_capped_with_progress_for_tests(
+  client: &Client,
+  url: &str,
+  token: Option<&str>,
+  progress: &ProgressBar,
+) -> Result<Vec<u8>> {
+  download_capped(client, url, token, Some(progress)).await
 }
 
 fn copy_with_cap(
@@ -174,8 +193,10 @@ pub async fn download_and_extract(
   token: Option<&str>,
 ) -> Result<()> {
   require_https_url(archive_url, "archive_url")?;
-  let bytes = download_capped(client, archive_url, token).await?;
-  extract_tar_gz(bytes, dest, subdir)
+  let pb = ui::progress::download_bar(None);
+  let bytes = download_capped(client, archive_url, token, Some(&pb)).await;
+  pb.finish_and_clear();
+  extract_tar_gz(bytes?, dest, subdir)
 }
 
 fn strip_archive_path(raw_path: &Path, subdir: Option<&str>) -> Option<PathBuf> {

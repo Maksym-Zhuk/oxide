@@ -6,13 +6,22 @@ pub use anesis::auth::login::{generate_state_token_for_tests, write_auth_file_fo
 pub use anesis::auth::token::get_auth_user_with_token_override_for_tests;
 pub use anesis::auth::token::is_token_expired_for_tests;
 
-pub use anesis::utils::archive::strip_archive_path_for_tests;
+pub use anesis::utils::archive::{
+  download_capped_with_progress_for_tests, strip_archive_path_for_tests,
+};
 
 pub use anesis::utils::http::{MAX_TOTAL_PAGES_FOR_TESTS, check_total_pages_for_tests};
 
 pub use anesis::utils::cleanup::{prune_empty_parents_for_tests, run_cleanup};
 
 pub use anesis::utils::picker::{match_score_for_tests, smart_match_for_tests, tokenize_for_tests};
+
+pub use anesis::utils::ui::caps::{caps_for_tests, detect_unicode_for_tests};
+
+pub use anesis::doctor::{
+  check_addon_cache_for_tests, check_home_writable_for_tests, check_project_consistency_for_tests,
+  check_template_cache_for_tests,
+};
 
 pub use anesis::mcp::push_inputs_for_tests;
 

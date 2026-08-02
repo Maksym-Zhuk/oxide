@@ -2,10 +2,9 @@ use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
-use colored::Colorize;
 use inquire::Confirm;
 
-use crate::addons::manifest::RunStep;
+use crate::{addons::manifest::RunStep, utils::ui};
 
 use super::{Rollback, StepFailure, StepResult};
 
@@ -32,13 +31,15 @@ fn execute_run_inner(
   if !step.description.is_empty() {
     println!(
       "  {}",
-      crate::utils::sanitize::sanitize_for_display(&step.description).dimmed()
+      ui::muted(crate::utils::sanitize::sanitize_for_display(
+        &step.description
+      ))
     );
   }
   println!(
     "  {} {}",
-    "will run:".dimmed(),
-    crate::utils::sanitize::sanitize_for_display(&command).yellow()
+    ui::muted("will run:"),
+    ui::yellow(crate::utils::sanitize::sanitize_for_display(&command))
   );
 
   if !allow_run {

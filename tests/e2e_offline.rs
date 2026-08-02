@@ -324,3 +324,100 @@ fn addon_lint_fails_through_the_real_binary_when_the_id_does_not_match_the_direc
     .failure()
     .stderr(predicates::str::contains("does not match its directory"));
 }
+
+#[test]
+fn new_dry_run_shows_a_tree_and_writes_nothing() {
+  let cli = Cli::new();
+  let template_dir = cli.write_template("e2e-template-dry-run");
+  cli
+    .command()
+    .args([
+      "template",
+      "link",
+      &template_dir.path().display().to_string(),
+      "--force",
+    ])
+    .assert()
+    .success();
+
+  cli
+    .command()
+    .args(["new", "proj", "e2e-template-dry-run", "--dry-run"])
+    .assert()
+    .success()
+    .stdout(predicates::str::contains("README.md"))
+    .stdout(predicates::str::contains("config.txt"))
+    .stdout(predicates::str::contains("No files were written."));
+
+  assert!(
+    !cli.workdir.path().join("proj").exists(),
+    "dry run must not create the project directory"
+  );
+}
+
+#[test]
+fn use_diff_leaves_the_real_project_untouched_and_shows_the_change() {
+  let cli = Cli::new();
+
+  let template_dir = cli.write_template("e2e-template-diff");
+  cli
+    .command()
+    .args([
+      "template",
+      "link",
+      &template_dir.path().display().to_string(),
+      "--force",
+    ])
+    .assert()
+    .success();
+  cli
+    .command()
+    .args(["new", "proj", "e2e-template-diff", "--yes"])
+    .assert()
+    .success();
+  let project_root = cli.workdir.path().join("proj");
+
+  let addon_dir = cli.write_addon(
+    "e2e-diff-addon",
+    r#"[
+      { "type": "create", "path": "addon-file.txt", "content": "from addon\n", "if_exists": "overwrite" }
+    ]"#,
+  );
+  cli
+    .command()
+    .args([
+      "addon",
+      "link",
+      &addon_dir.path().display().to_string(),
+      "--force",
+    ])
+    .assert()
+    .success();
+
+  cli
+    .command()
+    .current_dir(&project_root)
+    .args(["use", "e2e-diff-addon", "install", "--diff"])
+    .assert()
+    .success()
+    .stdout(predicates::str::contains("addon-file.txt"));
+
+  assert!(
+    !project_root.join("addon-file.txt").exists(),
+    "--diff must run against a scratch copy and leave the real project untouched"
+  );
+  assert!(
+    !project_root.join("anesis.lock").exists(),
+    "--diff must not record anything in the real project's anesis.lock"
+  );
+}
+
+#[test]
+fn use_diff_and_dry_run_together_is_a_usage_error() {
+  let cli = Cli::new();
+  cli
+    .command()
+    .args(["use", "some-addon", "install", "--diff", "--dry-run"])
+    .assert()
+    .failure();
+}

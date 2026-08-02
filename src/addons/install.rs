@@ -7,7 +7,11 @@ use serde::Deserialize;
 use crate::{
   auth::token::get_auth_user,
   context::{AppContext, CleanupTask},
-  utils::{archive::download_and_extract, errors::classify_reqwest_error, ui::spinner},
+  utils::{
+    archive::download_and_extract,
+    errors::classify_reqwest_error,
+    ui::{self, spinner},
+  },
 };
 
 use super::{
@@ -204,7 +208,9 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
   } else {
     "Downloading"
   };
-  let sp = spinner(format!("{action} addon '{addon_id}'..."));
+  if !ui::is_quiet() {
+    println!("{action} addon '{addon_id}'...");
+  }
   let download_result = download_and_extract(
     &ctx.client,
     &info.archive_url,
@@ -219,7 +225,6 @@ pub async fn install_addon(ctx: &AppContext, addon_id: &str) -> Result<AddonInst
       info.archive_url
     )
   });
-  sp.finish_and_clear();
 
   {
     let mut guard = ctx.cleanup_state.lock().unwrap_or_else(|e| e.into_inner());

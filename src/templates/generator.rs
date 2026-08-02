@@ -11,6 +11,7 @@ use crate::{
   context::{AppContext, CleanupTask},
   manifest::AnesisManifest,
   templates::{AnesisTemplate, ExcludeBlock, TemplateFile},
+  utils::ui,
 };
 
 use super::cache::get_cached_template;
@@ -108,7 +109,7 @@ fn insert_inputs(context: &mut Context, inputs: &HashMap<String, String>) {
   }
 }
 
-fn output_relative_path(file: &TemplateFile) -> Option<PathBuf> {
+pub fn output_relative_path(file: &TemplateFile) -> Option<PathBuf> {
   let name = file.path.file_name()?.to_string_lossy().to_string();
   if name == "anesis.template.json" {
     return None;
@@ -295,10 +296,10 @@ pub fn extract_dir_contents(
       let rendered = tera.render(&template_key, context)?;
 
       fs::write(&output_path, rendered)?;
-      println!("  ✓ {}", output_path.display());
+      println!("  {} {}", ui::symbols::ok(), output_path.display());
     } else {
       fs::write(&output_path, &file.contents)?;
-      println!("  ✓ {}", output_path.display());
+      println!("  {} {}", ui::symbols::ok(), output_path.display());
     }
   }
   Ok(())

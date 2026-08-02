@@ -2,10 +2,9 @@ use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
-use colored::Colorize;
 use inquire::Confirm;
 
-use crate::addons::manifest::PackagesStep;
+use crate::{addons::manifest::PackagesStep, utils::ui};
 
 use super::{Rollback, StepFailure, StepResult};
 
@@ -122,8 +121,8 @@ fn execute_packages_inner(
     let summary = describe_install(&pm, step);
     println!(
       "  {} {}",
-      "will run:".dimmed(),
-      crate::utils::sanitize::sanitize_for_display(&summary).yellow()
+      ui::muted("will run:"),
+      ui::yellow(crate::utils::sanitize::sanitize_for_display(&summary))
     );
 
     if non_interactive {
